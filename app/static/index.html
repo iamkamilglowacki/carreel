@@ -159,8 +159,9 @@
             </svg>
             <span class="text-xs font-medium" :class="stepColorClass(s.status)" x-text="s.label"></span>
             <!-- Progress bar -->
-            <div x-show="s.status === 'active' && s.progress > 0" class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden mt-1">
-              <div class="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out" :style="'width: ' + (s.progress || 0) + '%'"></div>
+            <div x-show="s.status === 'active'" class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden mt-1">
+              <div x-show="s.progress > 0" class="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out" :style="'width: ' + (s.progress || 0) + '%'"></div>
+              <div x-show="!s.progress || s.progress === 0" class="h-full bg-blue-500 rounded-full progress-indeterminate"></div>
             </div>
             <span x-show="s.status === 'active' && s.progress > 0" class="text-[10px] text-blue-400" x-text="s.progress + '%'"></span>
           </div>

@@ -61,6 +61,18 @@ video {
     animation: recording-pulse 1s ease-in-out infinite;
 }
 
+/* Indeterminate progress bar animation */
+@keyframes progress-indeterminate {
+    0% { width: 20%; margin-left: -20%; }
+    50% { width: 40%; }
+    100% { width: 20%; margin-left: 100%; }
+}
+
+.progress-indeterminate {
+    width: 30%;
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
+
 /* Scrollbar styling for dark theme */
 ::-webkit-scrollbar {
     width: 6px;

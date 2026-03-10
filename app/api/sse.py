@@ -30,13 +30,14 @@ async def job_events(job_id: str, request: Request):
                     event: JobEvent = await asyncio.wait_for(
                         queue.get(), timeout=PING_INTERVAL
                     )
-                    data = json.dumps(
-                        {
-                            "event": event.event,
-                            "step": event.step,
-                            "message": event.message,
-                        }
-                    )
+                    payload = {
+                        "event": event.event,
+                        "step": event.step,
+                        "message": event.message,
+                    }
+                    if event.progress is not None:
+                        payload["progress"] = event.progress
+                    data = json.dumps(payload)
                     yield f"event: {event.event}\ndata: {data}\n\n"
 
                     # Stop streaming after terminal events

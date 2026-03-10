@@ -127,12 +127,15 @@ class MediaProcessor(BaseAgent):
     def step(self) -> PipelineStep:
         return PipelineStep.MEDIA_PROCESS
 
-    async def process(self, ctx: JobContext) -> AgentResult:
+    async def process(self, ctx: JobContext, progress=None) -> AgentResult:
         raw_paths = ctx.raw_media_paths
         if not raw_paths:
             return AgentResult(
                 success=False, step=self.step, message="No raw media files provided"
             )
+
+        total_files = len(raw_paths)
+        done_files = 0
 
         # Phase 1: Classify all media
         images: list[Path] = []
@@ -160,6 +163,9 @@ class MediaProcessor(BaseAgent):
             clips = await _split_video_into_clips(video_path, ctx.job_dir, clip_idx)
             video_clips.extend(clips)
             clip_idx += len(clips)
+            done_files += 1
+            if progress:
+                await progress(done_files, total_files)
 
         # Phase 3: Create Ken Burns clips from all images
         image_clips: list[Path] = []
@@ -174,6 +180,9 @@ class MediaProcessor(BaseAgent):
             await run_ffmpeg(cmd, timeout=120)
             image_clips.append(output_path)
             clip_idx += 1
+            done_files += 1
+            if progress:
+                await progress(done_files, total_files)
 
         # Phase 4: Interleave video fragments and images
         if video_clips and image_clips:

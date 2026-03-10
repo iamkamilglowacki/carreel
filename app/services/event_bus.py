@@ -7,9 +7,10 @@ from dataclasses import dataclass
 @dataclass
 class JobEvent:
     job_id: str
-    event: str  # "started", "completed", "failed", "job_complete", "job_failed"
+    event: str  # "started", "completed", "failed", "progress", "job_complete", "job_failed"
     step: str | None
     message: str
+    progress: float | None = None  # 0.0–1.0 for progress events
 
 
 class EventBus:

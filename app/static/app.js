@@ -204,7 +204,7 @@ document.addEventListener("alpine:init", () => {
         } else if (i === currentIdx) {
           status = "active";
         }
-        return { key: s, label: t("steps." + s), status };
+        return { key: s, label: t("steps." + s), status, progress: status === "completed" ? 100 : 0 };
       });
     },
 
@@ -220,6 +220,7 @@ document.addEventListener("alpine:init", () => {
       es.addEventListener("started", handleEvent);
       es.addEventListener("completed", handleEvent);
       es.addEventListener("failed", handleEvent);
+      es.addEventListener("progress", handleEvent);
       es.addEventListener("job_complete", handleEvent);
       es.addEventListener("job_failed", handleEvent);
 
@@ -240,12 +241,16 @@ document.addEventListener("alpine:init", () => {
     },
 
     handleSSEEvent(data) {
-      const { event, step, message } = data;
+      const { event, step, message, progress } = data;
 
       if (event === "started" && step) {
         this.setStepStatus(step, "active");
+        this.setStepProgress(step, 0);
+      } else if (event === "progress" && step) {
+        this.setStepProgress(step, Math.round((progress || 0) * 100));
       } else if (event === "completed" && step) {
         this.setStepStatus(step, "completed");
+        this.setStepProgress(step, 100);
       } else if (event === "failed" && step) {
         this.setStepStatus(step, "failed");
       } else if (event === "job_complete") {
@@ -274,6 +279,11 @@ document.addEventListener("alpine:init", () => {
     setStepStatus(stepKey, status) {
       const found = this.steps.find((s) => s.key === stepKey);
       if (found) found.status = status;
+    },
+
+    setStepProgress(stepKey, pct) {
+      const found = this.steps.find((s) => s.key === stepKey);
+      if (found) found.progress = pct;
     },
 
     closeJob() {

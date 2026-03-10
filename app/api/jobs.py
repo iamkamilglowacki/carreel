@@ -34,8 +34,19 @@ async def _run_pipeline_background(ctx: JobContext, event_bus: EventBus) -> None
             )
         )
 
+    async def on_progress(step: PipelineStep, current: int, total: int) -> None:
+        await event_bus.publish(
+            JobEvent(
+                job_id=ctx.job_id,
+                event="progress",
+                step=step.value,
+                message=f"{current}/{total}",
+                progress=current / total if total > 0 else 0,
+            )
+        )
+
     try:
-        await run_pipeline(agents=agents, ctx=ctx, on_event=on_event)
+        await run_pipeline(agents=agents, ctx=ctx, on_event=on_event, on_progress=on_progress)
     except Exception as exc:
         logger.exception("Pipeline failed for job %s", ctx.job_id)
         ctx.status = JobStatus.FAILED

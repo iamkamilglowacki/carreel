@@ -16,7 +16,7 @@ class VideoAssembler(BaseAgent):
     def step(self) -> PipelineStep:
         return PipelineStep.VIDEO_ASSEMBLE
 
-    async def process(self, ctx: JobContext) -> AgentResult:
+    async def process(self, ctx: JobContext, progress=None) -> AgentResult:
         if not ctx.processed_clips:
             return AgentResult(
                 success=False, step=self.step, message="No processed clips to assemble"
@@ -26,16 +26,22 @@ class VideoAssembler(BaseAgent):
                 success=False, step=self.step, message="No voiceover audio available"
             )
 
+        total_steps = 3
+
         # 1. Write the concat file
         concat_file = ctx.job_dir / "concat.txt"
         concat_lines = [f"file '{clip.name}'" for clip in ctx.processed_clips]
         concat_file.write_text("\n".join(concat_lines) + "\n", encoding="utf-8")
         logger.info("Concat file: %d clips", len(ctx.processed_clips))
+        if progress:
+            await progress(1, total_steps)
 
         # 2. Concatenate clips into one silent video
         silent_video = ctx.job_dir / "silent.mp4"
         cmd_concat = concat_videos(ctx.processed_clips, silent_video, concat_file)
         await run_ffmpeg(cmd_concat, timeout=180)
+        if progress:
+            await progress(2, total_steps)
 
         # 3. Overlay audio and captions
         final_path = ctx.job_dir / "final.mp4"
@@ -46,6 +52,8 @@ class VideoAssembler(BaseAgent):
             output_path=final_path,
         )
         await run_ffmpeg(cmd_overlay, timeout=180)
+        if progress:
+            await progress(3, total_steps)
 
         ctx.final_video_path = final_path
         return AgentResult(

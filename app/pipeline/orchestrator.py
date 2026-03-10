@@ -10,12 +10,14 @@ from app.pipeline.base import BaseAgent
 logger = logging.getLogger(__name__)
 
 EventCallback = Callable[[PipelineStep, str, str], Awaitable[None]] | None
+ProgressCallback = Callable[[PipelineStep, int, int], Awaitable[None]] | None
 
 
 async def run_pipeline(
     agents: Sequence[BaseAgent],
     ctx: JobContext,
     on_event: EventCallback = None,
+    on_progress: ProgressCallback = None,
 ) -> JobContext:
     """Run each agent in sequence, updating *ctx* as we go.
 
@@ -47,8 +49,16 @@ async def run_pipeline(
         if on_event:
             await on_event(step, "started", f"Starting {step.value}")
 
+        # Build a progress reporter for this step
+        async def report_progress(current: int, total: int) -> None:
+            if on_progress:
+                await on_progress(step, current, total)
+
         try:
-            result: AgentResult = await agent.process(ctx)
+            result: AgentResult = await agent.process(ctx, report_progress)
+        except TypeError:
+            # Agent doesn't accept progress callback
+            result = await agent.process(ctx)
         except Exception as exc:
             ctx.status = JobStatus.FAILED
             ctx.error = f"{step.value}: {exc}"

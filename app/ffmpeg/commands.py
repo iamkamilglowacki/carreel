@@ -99,6 +99,32 @@ def ken_burns_from_image(
     ]
 
 
+def split_video_segment(
+    input_path: Path,
+    output_path: Path,
+    start: float,
+    duration: float,
+) -> list[str]:
+    """Extract a segment from a video, cropped to 9:16 portrait."""
+    return [
+        "ffmpeg", "-y",
+        "-ss", str(start),
+        "-i", str(input_path),
+        "-t", str(duration),
+        "-vf", (
+            f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
+            f"crop={WIDTH}:{HEIGHT}"
+        ),
+        "-r", str(FPS),
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "23",
+        "-an",
+        "-movflags", "+faststart",
+        str(output_path),
+    ]
+
+
 def concat_videos(clip_paths: list[Path], output_path: Path, concat_file: Path) -> list[str]:
     """Concatenate video clips using FFmpeg concat demuxer."""
     return [

@@ -1,7 +1,7 @@
-"""Generate an ASS subtitle file with word-by-word highlight animation.
+"""Generate an ASS subtitle file with Captions-app-style word-by-word animation.
 
-Uses ASS drawing mode to render rounded-rectangle backgrounds behind
-the currently spoken word.
+Each word pops in with a scale animation and gets a colored highlight,
+one or two words at a time, large and centered — similar to the Captions app.
 """
 
 import logging
@@ -12,37 +12,31 @@ from app.pipeline.base import BaseAgent
 
 logger = logging.getLogger(__name__)
 
-# Resolution constants (must match ffmpeg output)
 PLAY_RES_X = 1080
 PLAY_RES_Y = 1920
 
-ASS_HEADER = r"""[Script Info]
+# How many words to show at once
+WORDS_PER_GROUP = 2
+
+# Highlight color (yellow-orange like Captions app) in ASS BGR: &H00aaFF = orange
+HIGHLIGHT_COLOR = "&H0000CCFF"  # bright yellow-orange
+NORMAL_COLOR = "&H00FFFFFF"     # white
+SHADOW_COLOR = "&H80000000"     # semi-transparent black
+
+ASS_HEADER = rf"""[Script Info]
 ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
+PlayResX: {PLAY_RES_X}
+PlayResY: {PLAY_RES_Y}
 WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,60,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,0,2,60,60,500,1
-Style: Box,Arial,1,&H0000CCFF,&H0000CCFF,&H0000CCFF,&H0000CCFF,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
+Style: Word,Montserrat,90,{NORMAL_COLOR},{NORMAL_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,2,40,40,460,1
+Style: WordActive,Montserrat,90,{HIGHLIGHT_COLOR},{HIGHLIGHT_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,2,40,40,460,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-
-WORDS_PER_LINE = 3
-
-# Approximate character width for Arial Bold 60pt (uppercase) in ASS coords.
-# This is an empirical value — tweak if highlights are misaligned.
-CHAR_WIDTH = 37
-SPACE_WIDTH = 18
-FONT_HEIGHT = 64
-PAD_X = 16
-PAD_Y = 10
-RADIUS = 18
-MARGIN_V = 500
-MARGIN_H = 60
 
 
 def _format_ts(seconds: float) -> str:
@@ -53,85 +47,64 @@ def _format_ts(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
-def _rounded_rect(w: int, h: int, r: int) -> str:
-    """Return an ASS drawing-mode path for a rounded rectangle.
-
-    Origin is top-left (0, 0), size is w x h, corner radius r.
-    Uses cubic Bezier curves (``b`` command) for rounded corners.
-    """
-    r = min(r, w // 2, h // 2)
-    # ASS drawing: m = move, l = line, b = cubic bezier
-    return (
-        f"m {r} 0 "
-        f"l {w - r} 0 "
-        f"b {w} 0 {w} 0 {w} {r} "
-        f"l {w} {h - r} "
-        f"b {w} {h} {w} {h} {w - r} {h} "
-        f"l {r} {h} "
-        f"b 0 {h} 0 {h} 0 {h - r} "
-        f"l 0 {r} "
-        f"b 0 0 0 0 {r} 0"
-    )
-
-
-def _estimate_word_width(word: str) -> int:
-    """Rough pixel width of an uppercase word in the configured font."""
-    return len(word) * CHAR_WIDTH
-
-
 def _build_dialogue_lines(timestamps: list[dict[str, Any]]) -> list[str]:
-    """Build ASS Dialogue lines with word-by-word rounded-rect highlight.
+    """Build ASS Dialogue lines with Captions-style word animation.
 
-    For each word's time interval two events are emitted:
-      - Layer 0: a rounded-rectangle background shape (Box style + \\p1 drawing)
-      - Layer 1: the full text line with the current word in white (Default style)
+    For each group of words:
+    - All words show in white
+    - The currently spoken word gets highlighted in color with a pop-in scale effect
     """
     lines: list[str] = []
 
-    # Group words into display lines
+    # Group words into display groups (1-2 words at a time)
     groups: list[list[dict[str, Any]]] = []
-    for i in range(0, len(timestamps), WORDS_PER_LINE):
-        groups.append(timestamps[i : i + WORDS_PER_LINE])
+    for i in range(0, len(timestamps), WORDS_PER_GROUP):
+        groups.append(timestamps[i : i + WORDS_PER_GROUP])
 
     for group in groups:
+        group_start = group[0]["start"]
+        group_end = group[-1]["end"]
+
+        # Build the full display text for this group
         upper_words = [w["word"].upper() for w in group]
+        full_text = " ".join(upper_words)
 
-        # Total line width (for centering calculations)
-        word_widths = [_estimate_word_width(w) for w in upper_words]
-        total_line_w = sum(word_widths) + SPACE_WIDTH * (len(upper_words) - 1)
+        for word_idx, ts in enumerate(group):
+            w_start = ts["start"]
+            w_end = ts["end"]
+            word_upper = ts["word"].upper()
 
-        # Line is bottom-center aligned (Alignment=2, MarginV=500)
-        # Baseline Y in script coords
-        line_y = PLAY_RES_Y - MARGIN_V
-        line_x_start = (PLAY_RES_X - total_line_w) // 2
+            # Pop-in animation: scale from 85% to 105% then settle at 100%
+            # \t(t1,t2,\fscx105\fscy105) then \t(t2,t3,\fscx100\fscy100)
+            pop_duration = min(80, (w_end - w_start) * 1000 * 0.3)
 
-        for idx, ts in enumerate(group):
-            start = _format_ts(ts["start"])
-            end = _format_ts(ts["end"])
+            # Build text with inline color override for the active word
+            parts = []
+            for j, w in enumerate(upper_words):
+                if j == word_idx:
+                    # Active word: highlight color + pop scale
+                    parts.append(
+                        rf"{{\c{HIGHLIGHT_COLOR}\fscx85\fscy85"
+                        rf"\t(0,{pop_duration:.0f},\fscx107\fscy107)"
+                        rf"\t({pop_duration:.0f},{pop_duration * 2:.0f},\fscx100\fscy100)"
+                        rf"}}{w}"
+                    )
+                else:
+                    # Inactive word: white, normal scale
+                    parts.append(rf"{{\c{NORMAL_COLOR}\fscx100\fscy100}}{w}")
 
-            # --- Layer 1: text line (all words white) ---
-            text = " ".join(upper_words)
+            text = " ".join(parts)
+
             lines.append(
-                f"Dialogue: 1,{start},{end},Default,,0,0,0,,{text}"
+                f"Dialogue: 1,{_format_ts(w_start)},{_format_ts(w_end)},Word,,0,0,0,,{text}"
             )
 
-            # --- Layer 0: rounded-rect highlight behind current word ---
-            # Compute x offset of the highlighted word
-            x_offset = line_x_start
-            for j in range(idx):
-                x_offset += word_widths[j] + SPACE_WIDTH
-
-            ww = word_widths[idx]
-            box_x = x_offset - PAD_X
-            box_y = line_y - FONT_HEIGHT - PAD_Y
-            box_w = ww + PAD_X * 2
-            box_h = FONT_HEIGHT + PAD_Y * 2
-
-            shape = _rounded_rect(box_w, box_h, RADIUS)
-            pos_tag = rf"{{\pos({box_x},{box_y})\p1}}"
-            lines.append(
-                f"Dialogue: 0,{start},{end},Box,,0,0,0,,{pos_tag}{shape}"
-            )
+        # Also show the group text in white as a base layer during gaps
+        # (prevents flicker between words in the same group)
+        base_text = rf"{{\c{NORMAL_COLOR}}}" + full_text
+        lines.append(
+            f"Dialogue: 0,{_format_ts(group_start)},{_format_ts(group_end)},Word,,0,0,0,,{base_text}"
+        )
 
     return lines
 

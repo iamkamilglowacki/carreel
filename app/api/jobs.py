@@ -19,6 +19,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_CHUNK_SIZE = 1024 * 1024  # 1 MB
+
+
+async def _stream_to_file(upload: UploadFile, dest: Path) -> None:
+    """Stream uploaded file to disk in chunks to avoid loading it all into memory."""
+    with open(dest, "wb") as f:
+        while chunk := await upload.read(_CHUNK_SIZE):
+            f.write(chunk)
+
 
 async def _run_pipeline_background(ctx: JobContext, event_bus: EventBus) -> None:
     """Run the pipeline in a background task, publishing events along the way."""
@@ -100,7 +109,7 @@ async def create_job(
     # Save voice memo (if provided)
     if voice_memo:
         vm_path = input_dir / voice_memo.filename
-        vm_path.write_bytes(await voice_memo.read())
+        await _stream_to_file(voice_memo, vm_path)
         ctx.voice_memo_path = vm_path
 
     # Or use typed transcript directly
@@ -110,7 +119,7 @@ async def create_job(
     # Save media files
     for f in media:
         media_path = input_dir / f.filename
-        media_path.write_bytes(await f.read())
+        await _stream_to_file(f, media_path)
         ctx.raw_media_paths.append(media_path)
 
     # Persist initial state

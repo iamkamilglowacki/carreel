@@ -1,6 +1,7 @@
 """Sequential pipeline runner that executes agents in order."""
 
 import logging
+import time
 from collections.abc import Callable, Sequence
 from typing import Awaitable
 
@@ -32,10 +33,12 @@ async def run_pipeline(
         start, completion, or failure of each step.
     """
     ctx.status = JobStatus.PROCESSING
+    pipeline_start = time.monotonic()
 
     for agent in agents:
         step = agent.step
         ctx.current_step = step
+        step_start = time.monotonic()
         logger.info("[%s] Starting step: %s", ctx.job_id, step.value)
 
         # Skip transcription when transcript is already provided
@@ -75,11 +78,13 @@ async def run_pipeline(
                 await on_event(step, "failed", result.message)
             return ctx
 
-        logger.info("[%s] Completed step: %s", ctx.job_id, step.value)
+        elapsed = time.monotonic() - step_start
+        logger.info("[%s] Completed step: %s (%.1fs)", ctx.job_id, step.value, elapsed)
         if on_event:
             await on_event(step, "completed", result.message or f"Completed {step.value}")
 
     ctx.status = JobStatus.COMPLETED
     ctx.current_step = None
-    logger.info("[%s] Pipeline completed successfully", ctx.job_id)
+    total = time.monotonic() - pipeline_start
+    logger.info("[%s] Pipeline completed successfully (%.1fs total)", ctx.job_id, total)
     return ctx

@@ -39,8 +39,8 @@ document.addEventListener("alpine:init", () => {
 
     init() {
       this.fetchJobs();
-      // Poll for job list updates every 5 seconds
-      setInterval(() => this.fetchJobs(), 5000);
+      // Poll for job list updates every 15 seconds
+      setInterval(() => this.fetchJobs(), 15000);
     },
 
     // ---------- API calls ----------

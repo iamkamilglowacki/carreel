@@ -35,7 +35,7 @@ SPLIT_MIN = 2.0        # minimum fragment duration
 SPLIT_MAX = 3.0        # maximum fragment duration
 
 # Max concurrent ffmpeg processes to avoid saturating CPU
-MAX_CONCURRENT_FFMPEG = 4
+MAX_CONCURRENT_FFMPEG = 6
 
 
 def _classify_media(path: Path, probe_data: dict | None = None) -> str:

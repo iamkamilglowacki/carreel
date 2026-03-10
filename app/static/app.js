@@ -15,6 +15,8 @@ document.addEventListener("alpine:init", () => {
 
     // Input
     isRecording: false,
+    transcribing: false,
+    cleaningUp: false,
     mediaRecorder: null,
     audioChunks: [],
     recordedBlob: null,
@@ -95,6 +97,70 @@ document.addEventListener("alpine:init", () => {
       this.isRecording = false;
       if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
         this.mediaRecorder.stop();
+      }
+    },
+
+    async stopAndTranscribe() {
+      if (!this.isRecording) return;
+      this.isRecording = false;
+
+      // Stop recorder and wait for blob
+      await new Promise((resolve) => {
+        this.mediaRecorder.onstop = () => {
+          const mimeType = this.mediaRecorder.mimeType;
+          this.recordedBlob = new Blob(this.audioChunks, { type: mimeType });
+          // Release mic
+          this.mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+          resolve();
+        };
+        this.mediaRecorder.stop();
+      });
+
+      // Send to transcription API
+      this.transcribing = true;
+      this.uploadError = "";
+      try {
+        const form = new FormData();
+        form.append("file", this.recordedBlob, "recording.webm");
+        const res = await fetch("/api/transcribe", { method: "POST", body: form });
+        if (!res.ok) {
+          this.uploadError = t("upload.transcribeError") + (await res.text());
+          return;
+        }
+        const data = await res.json();
+        if (data.text) {
+          // Append to existing text or set it
+          if (this.typedTranscript.trim()) {
+            this.typedTranscript += " " + data.text;
+          } else {
+            this.typedTranscript = data.text;
+          }
+        }
+      } catch (e) {
+        this.uploadError = t("upload.transcribeError") + e.message;
+      } finally {
+        this.transcribing = false;
+      }
+    },
+
+    async cleanUpText() {
+      if (!this.typedTranscript.trim() || this.cleaningUp) return;
+      this.cleaningUp = true;
+      this.uploadError = "";
+      try {
+        const res = await fetch("/api/cleanup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: this.typedTranscript }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.text) this.typedTranscript = data.text;
+        }
+      } catch (e) {
+        this.uploadError = e.message;
+      } finally {
+        this.cleaningUp = false;
       }
     },
 

@@ -27,12 +27,12 @@ ASS_HEADER = rf"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {PLAY_RES_X}
 PlayResY: {PLAY_RES_Y}
-WrapStyle: 0
+WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Word,Montserrat,90,{NORMAL_COLOR},{NORMAL_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,2,40,40,460,1
-Style: WordActive,Montserrat,90,{HIGHLIGHT_COLOR},{HIGHLIGHT_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,2,40,40,460,1
+Style: Word,Montserrat,72,{NORMAL_COLOR},{NORMAL_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,5,80,80,460,1
+Style: WordActive,Montserrat,72,{HIGHLIGHT_COLOR},{HIGHLIGHT_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,5,80,80,460,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

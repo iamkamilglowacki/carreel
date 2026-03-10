@@ -1,4 +1,10 @@
-"""Pure functions that build FFmpeg command-line argument lists."""
+"""Pure functions that build FFmpeg command-line argument lists.
+
+Performance notes:
+- Clips are encoded ONCE during media processing (split/Ken Burns).
+- Concatenation uses stream copy (-c copy) — no re-encoding.
+- Only the final overlay step re-encodes (to burn in ASS subtitles).
+"""
 
 from pathlib import Path
 
@@ -6,6 +12,10 @@ from pathlib import Path
 WIDTH = 1080
 HEIGHT = 1920
 FPS = 30
+
+# Encoding settings — tuned for speed on social-media reels
+PRESET = "veryfast"
+CRF = "23"
 
 
 def probe_media(path: Path) -> list[str]:
@@ -42,9 +52,10 @@ def crop_video_to_portrait(input_path: Path, output_path: Path) -> list[str]:
         ),
         "-r", str(FPS),
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "23",
+        "-preset", PRESET,
+        "-crf", CRF,
         "-an",
+        "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         str(output_path),
     ]
@@ -56,17 +67,9 @@ def ken_burns_from_image(
     duration: float,
     zoom_direction: str = "in",
 ) -> list[str]:
-    """Apply Ken Burns (zoom + pan) effect to a still image.
-
-    The image is first scaled (preserving aspect ratio) so it covers at least
-    1080x1920, then center-cropped to exactly 9:16. The zoompan effect is
-    applied on the properly cropped frame so there is no distortion.
-
-    zoom_direction: 'in' starts wide and zooms in, 'out' starts tight and zooms out.
-    """
+    """Apply Ken Burns (zoom + pan) effect to a still image."""
     total_frames = int(duration * FPS)
 
-    # Pan slowly to keep it interesting (drift from center)
     x_expr = f"iw/2-(iw/zoom/2)+on*0.5/{total_frames}"
     y_expr = f"ih/2-(ih/zoom/2)"
 
@@ -75,7 +78,6 @@ def ken_burns_from_image(
     else:
         zoom_expr = f"if(eq(on,1),1.3,zoom-0.3/{total_frames})"
 
-    # Scale to cover 9:16, crop to exact dimensions, then apply Ken Burns
     vf = (
         f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
         f"crop={WIDTH}:{HEIGHT},"
@@ -91,8 +93,8 @@ def ken_burns_from_image(
         "-vf", vf,
         "-t", str(duration),
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "23",
+        "-preset", PRESET,
+        "-crf", CRF,
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         str(output_path),
@@ -105,7 +107,10 @@ def split_video_segment(
     start: float,
     duration: float,
 ) -> list[str]:
-    """Extract a segment from a video, cropped to 9:16 portrait."""
+    """Extract a segment from a video, cropped to 9:16 portrait.
+
+    Uses -ss before -i for fast input seeking (demuxer-level).
+    """
     return [
         "ffmpeg", "-y",
         "-ss", str(start),
@@ -117,26 +122,28 @@ def split_video_segment(
         ),
         "-r", str(FPS),
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "23",
+        "-preset", PRESET,
+        "-crf", CRF,
         "-an",
+        "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         str(output_path),
     ]
 
 
 def concat_videos(clip_paths: list[Path], output_path: Path, concat_file: Path) -> list[str]:
-    """Concatenate video clips using FFmpeg concat demuxer."""
+    """Concatenate video clips using stream copy (no re-encoding).
+
+    All input clips must share the same codec, resolution, and pixel format.
+    This is guaranteed because they all come from split_video_segment or
+    ken_burns_from_image which produce identical output parameters.
+    """
     return [
         "ffmpeg", "-y",
         "-f", "concat",
         "-safe", "0",
         "-i", str(concat_file),
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-an",
+        "-c", "copy",
         "-movflags", "+faststart",
         str(output_path),
     ]
@@ -148,7 +155,10 @@ def overlay_audio_and_captions(
     captions_path: Path | None,
     output_path: Path,
 ) -> list[str]:
-    """Merge video + audio + burn-in ASS subtitles into final output."""
+    """Merge video + audio + burn-in ASS subtitles into final output.
+
+    This is the ONLY encoding pass in the assembly phase.
+    """
     vf_filter = f"ass={captions_path}" if captions_path else "null"
 
     return [
@@ -157,10 +167,10 @@ def overlay_audio_and_captions(
         "-i", str(audio_path),
         "-vf", vf_filter,
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "20",
+        "-preset", PRESET,
+        "-crf", CRF,
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "128k",
         "-shortest",
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",

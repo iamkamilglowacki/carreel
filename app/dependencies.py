@@ -12,6 +12,10 @@ def build_agents() -> list[BaseAgent]:
         from app.pipeline.mocks.mock_transcriber import MockTranscriber
 
         agents.append(MockTranscriber())
+    elif settings.transcriber_provider == "elevenlabs":
+        from app.pipeline.agents.elevenlabs_transcriber import ElevenLabsTranscriber
+
+        agents.append(ElevenLabsTranscriber())
 
     # Scriptwriter
     if settings.scriptwriter_provider == "mock":

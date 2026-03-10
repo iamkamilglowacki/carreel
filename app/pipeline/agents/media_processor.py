@@ -3,8 +3,11 @@
 Videos longer than SPLIT_THRESHOLD seconds are automatically split into
 short dynamic fragments (SPLIT_MIN–SPLIT_MAX seconds each) so the final
 reel feels fast-paced and engaging.
+
+Performance: video segments and image clips are processed in parallel.
 """
 
+import asyncio
 import json
 import logging
 import random
@@ -31,6 +34,9 @@ SPLIT_THRESHOLD = 5.0  # split videos longer than 5s
 SPLIT_MIN = 2.0        # minimum fragment duration
 SPLIT_MAX = 3.0        # maximum fragment duration
 
+# Max concurrent ffmpeg processes to avoid saturating CPU
+MAX_CONCURRENT_FFMPEG = 4
+
 
 def _classify_media(path: Path, probe_data: dict | None = None) -> str:
     """Return 'image' or 'video' based on extension, falling back to probe data."""
@@ -55,67 +61,60 @@ async def _get_video_duration(path: Path) -> float:
     return float(output.strip())
 
 
-async def _split_video_into_clips(
+async def _plan_video_splits(
     video_path: Path,
     job_dir: Path,
     clip_index_start: int,
-) -> list[Path]:
-    """Split a long video into short dynamic fragments."""
+) -> list[tuple[Path, list[str]]]:
+    """Plan split commands for a video without executing them.
+
+    Returns a list of (output_path, ffmpeg_cmd) tuples.
+    """
     total_duration = await _get_video_duration(video_path)
 
     if total_duration <= SPLIT_THRESHOLD:
-        # Short video — just crop to portrait as-is
         output_path = job_dir / f"clip_{clip_index_start:03d}.mp4"
         cmd = crop_video_to_portrait(video_path, output_path)
-        await run_ffmpeg(cmd, timeout=120)
-        return [output_path]
+        return [(output_path, cmd)]
 
-    # Split into 2-3 second fragments
-    clips: list[Path] = []
+    planned: list[tuple[Path, list[str]]] = []
     pos = 0.0
     idx = clip_index_start
 
-    while pos < total_duration - 0.5:  # skip tiny remainder
+    while pos < total_duration - 0.5:
         frag_duration = round(random.uniform(SPLIT_MIN, SPLIT_MAX), 1)
         remaining = total_duration - pos
         if remaining < SPLIT_MIN:
             break
         if remaining < frag_duration + SPLIT_MIN:
-            frag_duration = remaining  # use the rest
+            frag_duration = remaining
 
         output_path = job_dir / f"clip_{idx:03d}.mp4"
         cmd = split_video_segment(video_path, output_path, pos, frag_duration)
         logger.info(
-            "Splitting %s: %.1fs–%.1fs (%.1fs)",
+            "Planned split %s: %.1fs–%.1fs (%.1fs)",
             video_path.name, pos, pos + frag_duration, frag_duration,
         )
-        await run_ffmpeg(cmd, timeout=120)
-        clips.append(output_path)
+        planned.append((output_path, cmd))
 
         pos += frag_duration
         idx += 1
 
-    return clips
+    return planned
 
 
 def _interleave(video_clips: list[Path], image_clips: list[Path]) -> list[Path]:
-    """Interleave video fragments and image clips for a dynamic reel.
-
-    Pattern: video → image → video → image → ...
-    If one list runs out, the remaining items from the other list are appended.
-    """
+    """Interleave video fragments and image clips for a dynamic reel."""
     result: list[Path] = []
     vi, ii = 0, 0
 
     while vi < len(video_clips) and ii < len(image_clips):
         result.append(video_clips[vi])
         vi += 1
-        # After every 2 video clips, insert an image for variety
         if vi % 2 == 0 or vi >= len(video_clips):
             result.append(image_clips[ii])
             ii += 1
 
-    # Append remaining clips
     result.extend(video_clips[vi:])
     result.extend(image_clips[ii:])
 
@@ -134,9 +133,6 @@ class MediaProcessor(BaseAgent):
                 success=False, step=self.step, message="No raw media files provided"
             )
 
-        total_files = len(raw_paths)
-        done_files = 0
-
         # Phase 1: Classify all media
         images: list[Path] = []
         videos: list[Path] = []
@@ -154,35 +150,49 @@ class MediaProcessor(BaseAgent):
             else:
                 videos.append(media_path)
 
-        # Phase 2: Split all videos into short fragments
-        video_clips: list[Path] = []
+        # Phase 2: Plan all work (lightweight — only ffprobe calls)
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_FFMPEG)
+        done_counter = 0
+
+        # Plan video splits (needs ffprobe for duration)
+        all_video_plans: list[tuple[Path, list[str]]] = []
         clip_idx = 0
-
         for video_path in videos:
-            logger.info("Splitting video: %s", video_path.name)
-            clips = await _split_video_into_clips(video_path, ctx.job_dir, clip_idx)
-            video_clips.extend(clips)
-            clip_idx += len(clips)
-            done_files += 1
-            if progress:
-                await progress(done_files, total_files)
+            plans = await _plan_video_splits(video_path, ctx.job_dir, clip_idx)
+            all_video_plans.extend(plans)
+            clip_idx += len(plans)
 
-        # Phase 3: Create Ken Burns clips from all images
-        image_clips: list[Path] = []
+        # Plan image Ken Burns commands
         zoom_directions = ["in", "out"]
-        image_duration = 2.5  # each image shows for 2.5s
-
+        image_duration = 2.5
+        all_image_plans: list[tuple[Path, list[str]]] = []
         for i, img_path in enumerate(images):
             output_path = ctx.job_dir / f"clip_{clip_idx:03d}.mp4"
             zoom = zoom_directions[i % len(zoom_directions)]
             cmd = ken_burns_from_image(img_path, output_path, image_duration, zoom)
-            logger.info("Processing image: %s (Ken Burns %s)", img_path.name, zoom)
-            await run_ffmpeg(cmd, timeout=120)
-            image_clips.append(output_path)
+            all_image_plans.append((output_path, cmd))
             clip_idx += 1
-            done_files += 1
+
+        # Phase 3: Execute ALL ffmpeg commands in parallel (bounded by semaphore)
+        total_tasks = len(all_video_plans) + len(all_image_plans)
+
+        async def _run_one(cmd: list[str]) -> None:
+            nonlocal done_counter
+            async with semaphore:
+                await run_ffmpeg(cmd, timeout=120)
+            done_counter += 1
             if progress:
-                await progress(done_files, total_files)
+                await progress(done_counter, total_tasks)
+
+        all_tasks = [
+            _run_one(cmd)
+            for _, cmd in all_video_plans + all_image_plans
+        ]
+        await asyncio.gather(*all_tasks)
+
+        # Collect results in planned order
+        video_clips = [path for path, _ in all_video_plans]
+        image_clips = [path for path, _ in all_image_plans]
 
         # Phase 4: Interleave video fragments and images
         if video_clips and image_clips:

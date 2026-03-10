@@ -18,5 +18,6 @@ jobs:
             cd /opt/carreel
             git pull origin main
             docker-compose build --no-cache
+            docker-compose rm -f
             docker-compose up -d
             docker image prune -f

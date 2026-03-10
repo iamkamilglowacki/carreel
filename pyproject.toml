@@ -1,5 +1,5 @@
 [project]
-name = "reeldealer-ai"
+name = "carreel"
 version = "0.1.0"
 description = "AI-powered car dealer video reels generator"
 requires-python = ">=3.11"

@@ -1,4 +1,4 @@
-/* ReelDealer AI - Alpine.js application logic */
+/* CarReel - Alpine.js application logic */
 
 document.addEventListener("alpine:init", () => {
   Alpine.data("reelApp", () => ({

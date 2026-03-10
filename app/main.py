@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="ReelDealer AI", lifespan=lifespan)
+app = FastAPI(title="CarReel", lifespan=lifespan)
 
 
 class NoCacheStaticMiddleware(BaseHTTPMiddleware):

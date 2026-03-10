@@ -1,4 +1,4 @@
-/* ReelDealer AI - Internationalization (i18n) */
+/* CarReel - Internationalization (i18n) */
 
 const translations = {
   pl: {
@@ -42,7 +42,7 @@ const translations = {
     "steps.caption_generate": "Napisy",
     "steps.video_assemble": "Montaż",
 
-    "footer.text": "ReelDealer AI — Generator Rolek Samochodowych",
+    "footer.text": "CarReel — Generator Rolek Samochodowych",
   },
 };
 

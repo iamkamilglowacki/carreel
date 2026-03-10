@@ -15,7 +15,7 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/carsreels
+            cd /opt/carreel
             git pull origin main
             docker-compose build --no-cache
             docker-compose up -d

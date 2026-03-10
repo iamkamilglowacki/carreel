@@ -63,8 +63,8 @@ class JobContext:
     def to_dict(self) -> dict[str, Any]:
         return {
             "job_id": self.job_id,
-            "status": self.status.value,
-            "current_step": self.current_step.value if self.current_step else None,
+            "status": self.status.value if isinstance(self.status, Enum) else self.status,
+            "current_step": self.current_step.value if isinstance(self.current_step, Enum) else self.current_step,
             "error": self.error,
             "created_at": self.created_at,
             "has_transcript": bool(self.transcript),

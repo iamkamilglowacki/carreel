@@ -22,6 +22,7 @@ def save_job(ctx: JobContext) -> None:
     path = _metadata_path(ctx.job_id)
     data = {
         "job_id": ctx.job_id,
+        "session_id": ctx.session_id,
         "status": ctx.status.value,
         "current_step": ctx.current_step.value if ctx.current_step else None,
         "error": ctx.error,
@@ -48,6 +49,7 @@ def load_job(job_id: str) -> JobContext | None:
     data = json.loads(path.read_text())
     ctx = JobContext(
         job_id=data["job_id"],
+        session_id=data.get("session_id", ""),
         job_dir=get_job_dir(job_id),
         status=JobStatus(data["status"]),
         current_step=data.get("current_step"),
@@ -66,8 +68,8 @@ def load_job(job_id: str) -> JobContext | None:
     return ctx
 
 
-def list_jobs() -> list[dict]:
-    """List all jobs with summary info."""
+def list_jobs(session_id: str = "") -> list[dict]:
+    """List jobs filtered by session_id."""
     jobs_dir = settings.jobs_dir
     if not jobs_dir.exists():
         return []
@@ -80,6 +82,8 @@ def list_jobs() -> list[dict]:
         if meta.exists():
             try:
                 data = json.loads(meta.read_text())
+                if session_id and data.get("session_id", "") != session_id:
+                    continue
                 results.append({
                     "job_id": data["job_id"],
                     "status": data["status"],

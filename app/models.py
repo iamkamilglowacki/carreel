@@ -37,6 +37,7 @@ class JobContext:
     """Mutable context passed through the pipeline. Each agent reads/writes fields."""
 
     job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    session_id: str = ""
     job_dir: Path = field(default_factory=lambda: Path("."))
 
     # Input files

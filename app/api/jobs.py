@@ -102,6 +102,7 @@ async def create_job(
     event_bus: EventBus = request.app.state.event_bus
 
     ctx = JobContext()
+    ctx.session_id = request.state.session_id
     job_dir = create_job_dir(ctx.job_id)
     ctx.job_dir = job_dir
 
@@ -144,25 +145,25 @@ async def create_job(
 
 
 @router.get("/jobs")
-async def get_jobs():
-    """List all jobs."""
-    return list_jobs()
+async def get_jobs(request: Request):
+    """List jobs for the current session."""
+    return list_jobs(session_id=request.state.session_id)
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(job_id: str):
+async def get_job(request: Request, job_id: str):
     """Get job detail."""
     ctx = load_job(job_id)
-    if ctx is None:
+    if ctx is None or ctx.session_id != request.state.session_id:
         raise HTTPException(status_code=404, detail="Job not found")
     return ctx.to_dict()
 
 
 @router.delete("/jobs/{job_id}")
-async def remove_job(job_id: str):
+async def remove_job(request: Request, job_id: str):
     """Delete a job and its files."""
     ctx = load_job(job_id)
-    if ctx is None:
+    if ctx is None or ctx.session_id != request.state.session_id:
         raise HTTPException(status_code=404, detail="Job not found")
     delete_job_dir(job_id)
     return {"deleted": True, "job_id": job_id}

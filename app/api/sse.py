@@ -3,10 +3,11 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from starlette.responses import StreamingResponse
 
 from app.services.event_bus import EventBus, JobEvent
+from app.services.job_store import load_job
 
 router = APIRouter()
 
@@ -16,6 +17,10 @@ PING_INTERVAL = 15  # seconds
 @router.get("/jobs/{job_id}/events")
 async def job_events(job_id: str, request: Request):
     """Stream SSE events for a specific job."""
+    ctx = load_job(job_id)
+    if ctx is None or ctx.session_id != request.state.session_id:
+        raise HTTPException(status_code=404, detail="Job not found")
+
     event_bus: EventBus = request.app.state.event_bus
 
     async def event_generator():

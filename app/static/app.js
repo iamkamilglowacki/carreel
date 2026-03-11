@@ -7,6 +7,7 @@ document.addEventListener("alpine:init", () => {
     selectedJob: null,
     steps: [],
     uploading: false,
+    uploadProgress: 0,
     uploadError: "",
     eventSource: null,
 
@@ -178,6 +179,7 @@ document.addEventListener("alpine:init", () => {
       }
 
       this.uploading = true;
+      this.uploadProgress = 0;
       this.uploadError = "";
 
       const form = new FormData();
@@ -194,14 +196,33 @@ document.addEventListener("alpine:init", () => {
       }
 
       try {
-        const res = await fetch("/api/jobs", { method: "POST", body: form });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          this.uploadError = err.detail || t("upload.errorUpload");
-          return;
-        }
+        const data = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/jobs");
 
-        const data = await res.json();
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(JSON.parse(xhr.responseText));
+            } else {
+              try {
+                const err = JSON.parse(xhr.responseText);
+                reject(new Error(err.detail || t("upload.errorUpload")));
+              } catch {
+                reject(new Error(t("upload.errorUpload")));
+              }
+            }
+          };
+
+          xhr.onerror = () => reject(new Error(t("upload.errorNetwork")));
+          xhr.send(form);
+        });
+
         this.recordedBlob = null;
         this.typedTranscript = "";
         this.mediaFiles = [];
@@ -213,9 +234,10 @@ document.addEventListener("alpine:init", () => {
         await this.fetchJobs();
         this.selectJob(data.job_id);
       } catch (e) {
-        this.uploadError = t("upload.errorNetwork") + e.message;
+        this.uploadError = e.message;
       } finally {
         this.uploading = false;
+        this.uploadProgress = 0;
       }
     },
 

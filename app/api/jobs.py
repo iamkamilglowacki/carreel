@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 
 from typing import Optional
@@ -106,10 +107,14 @@ async def create_job(
 
     input_dir = get_input_dir(ctx.job_id)
 
+    upload_start = time.monotonic()
+    total_bytes = 0
+
     # Save voice memo (if provided)
     if voice_memo:
         vm_path = input_dir / voice_memo.filename
         await _stream_to_file(voice_memo, vm_path)
+        total_bytes += vm_path.stat().st_size
         ctx.voice_memo_path = vm_path
 
     # Or use typed transcript directly
@@ -120,7 +125,14 @@ async def create_job(
     for f in media:
         media_path = input_dir / f.filename
         await _stream_to_file(f, media_path)
+        total_bytes += media_path.stat().st_size
         ctx.raw_media_paths.append(media_path)
+
+    upload_elapsed = time.monotonic() - upload_start
+    logger.info(
+        "[%s] Upload complete: %d files, %.1f MB in %.1fs",
+        ctx.job_id, len(media), total_bytes / 1024 / 1024, upload_elapsed,
+    )
 
     # Persist initial state
     save_job(ctx)

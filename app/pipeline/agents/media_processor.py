@@ -30,9 +30,9 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm"}
 
 # Auto-split settings
-SPLIT_THRESHOLD = 5.0  # split videos longer than 5s
-SPLIT_MIN = 2.0        # minimum fragment duration
-SPLIT_MAX = 3.0        # maximum fragment duration
+SPLIT_THRESHOLD = 5.0   # split videos longer than 5s
+CLIP_DURATION = 2.0     # each clip is 2 seconds
+MAX_CLIPS_PER_VIDEO = 15
 
 # Max concurrent ffmpeg processes to avoid saturating CPU
 MAX_CONCURRENT_FFMPEG = 6
@@ -77,27 +77,22 @@ async def _plan_video_splits(
         cmd = crop_video_to_portrait(video_path, output_path)
         return [(output_path, cmd)]
 
+    # Pick up to MAX_CLIPS_PER_VIDEO evenly spaced clips of CLIP_DURATION seconds
+    num_clips = min(MAX_CLIPS_PER_VIDEO, int(total_duration / CLIP_DURATION))
+    spacing = total_duration / num_clips
+
     planned: list[tuple[Path, list[str]]] = []
-    pos = 0.0
     idx = clip_index_start
 
-    while pos < total_duration - 0.5:
-        frag_duration = round(random.uniform(SPLIT_MIN, SPLIT_MAX), 1)
-        remaining = total_duration - pos
-        if remaining < SPLIT_MIN:
-            break
-        if remaining < frag_duration + SPLIT_MIN:
-            frag_duration = remaining
-
+    for i in range(num_clips):
+        pos = round(i * spacing, 2)
         output_path = job_dir / f"clip_{idx:03d}.mp4"
-        cmd = split_video_segment(video_path, output_path, pos, frag_duration)
+        cmd = split_video_segment(video_path, output_path, pos, CLIP_DURATION)
         logger.info(
             "Planned split %s: %.1fs–%.1fs (%.1fs)",
-            video_path.name, pos, pos + frag_duration, frag_duration,
+            video_path.name, pos, pos + CLIP_DURATION, CLIP_DURATION,
         )
         planned.append((output_path, cmd))
-
-        pos += frag_duration
         idx += 1
 
     return planned

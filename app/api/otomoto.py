@@ -81,4 +81,5 @@ async def create_otomoto_job(request: Request, body: OtomotoRequest):
         "status": ctx.status.value,
         "listing": listing.to_dict(),
         "sales_copy": sales_copy,
+        "phone_number": listing.phone_number or "",
     }

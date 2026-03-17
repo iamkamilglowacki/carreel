@@ -36,7 +36,11 @@ document.addEventListener("alpine:init", () => {
     otomotoListing: null,
     otomotoGenerating: false,
     otomotoSalesCopy: "",
+    otomotoPhoneNumber: "",
     otomotoListingTitle: "",
+
+    // WhatsApp is localhost-only
+    isLocal: ["localhost", "127.0.0.1"].includes(window.location.hostname),
 
     // Reel preview playback
     reelPaused: true,
@@ -325,6 +329,7 @@ document.addEventListener("alpine:init", () => {
         if (data.sales_copy) {
           this.otomotoSalesCopy = data.sales_copy;
         }
+        this.otomotoPhoneNumber = data.phone_number || "";
         this.otomotoListingTitle = data.listing?.title || "";
         this.otomotoUrl = "";
         this.otomotoListing = null;
@@ -592,6 +597,27 @@ document.addEventListener("alpine:init", () => {
 
     removeMediaFile(idx) {
       this.mediaFiles = this.mediaFiles.filter((_, i) => i !== idx);
+    },
+
+    // WhatsApp — localhost only
+    openWhatsApp() {
+      if (!this.otomotoPhoneNumber || !this.selectedJob) return;
+      const link = document.createElement("a");
+      link.href = `/api/jobs/${this.selectedJob.job_id}/output`;
+      link.download = "";
+      link.click();
+      let phone = this.otomotoPhoneNumber.replace(/\D/g, "");
+      if (phone.length === 9) phone = "48" + phone;
+      const carName = this.otomotoListingTitle || (getLang() === "de" ? "Fahrzeug" : "samochód");
+      const msgs = {
+        pl: `Dzień dobry! Przygotowałem krótką prezentację wideo Pana/Pani ogłoszenia: ${carName}. Chętnie porozmawiam o szczegółach współpracy. Pozdrawiam!`,
+        en: `Hello! I've prepared a short video presentation of your listing: ${carName}. I'd love to discuss cooperation details. Best regards!`,
+        de: `Guten Tag! Ich habe eine kurze Videopräsentation Ihres Inserats erstellt: ${carName}. Ich freue mich auf ein Gespräch über die Zusammenarbeit. Mit freundlichen Grüßen!`,
+      };
+      const msg = msgs[getLang()] || msgs.pl;
+      setTimeout(() => {
+        window.open(`https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(msg)}`, "_blank");
+      }, 1000);
     },
 
     // Reel preview play/pause

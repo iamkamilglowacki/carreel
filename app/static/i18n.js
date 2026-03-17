@@ -38,6 +38,7 @@ const translations = {
     "job.preview": "Podgląd",
     "job.downloadMp4": "Pobierz MP4",
 
+    "job.sendWhatsApp": "Wyślij na WhatsApp",
     "job.confirmDelete": "Na pewno usunąć to zadanie?",
 
     "jobs.title": "Zadania",
@@ -105,6 +106,7 @@ const translations = {
     "job.preview": "Preview",
     "job.downloadMp4": "Download MP4",
 
+    "job.sendWhatsApp": "Send via WhatsApp",
     "job.confirmDelete": "Are you sure you want to delete this job?",
 
     "jobs.title": "Jobs",
@@ -172,6 +174,7 @@ const translations = {
     "job.preview": "Vorschau",
     "job.downloadMp4": "MP4 herunterladen",
 
+    "job.sendWhatsApp": "Per WhatsApp senden",
     "job.confirmDelete": "Möchten Sie diesen Auftrag wirklich löschen?",
 
     "jobs.title": "Aufträge",

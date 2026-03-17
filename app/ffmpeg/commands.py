@@ -154,15 +154,23 @@ def overlay_audio_and_captions(
     audio_path: Path,
     captions_path: Path | None,
     output_path: Path,
+    audio_duration: float | None = None,
 ) -> list[str]:
     """Merge video + audio + burn-in ASS subtitles into final output.
 
     This is the ONLY encoding pass in the assembly phase.
+    When audio_duration is provided, the video is looped to match
+    the voiceover length exactly.
     """
     vf_filter = f"ass={captions_path}" if captions_path else "null"
 
-    return [
-        "ffmpeg", "-y",
+    cmd = ["ffmpeg", "-y"]
+
+    if audio_duration is not None:
+        # Loop the video indefinitely and trim to audio length
+        cmd += ["-stream_loop", "-1"]
+
+    cmd += [
         "-i", str(video_path),
         "-i", str(audio_path),
         "-vf", vf_filter,
@@ -171,11 +179,20 @@ def overlay_audio_and_captions(
         "-crf", CRF,
         "-c:a", "aac",
         "-b:a", "128k",
-        "-shortest",
+    ]
+
+    if audio_duration is not None:
+        cmd += ["-t", str(round(audio_duration, 2))]
+    else:
+        cmd += ["-shortest"]
+
+    cmd += [
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         str(output_path),
     ]
+
+    return cmd
 
 
 def generate_silence(duration: float, output_path: Path) -> list[str]:

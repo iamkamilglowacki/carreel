@@ -39,10 +39,13 @@ class ElevenLabsTranscriber(BaseAgent):
         audio_bytes = ctx.voice_memo_path.read_bytes()
         filename = ctx.voice_memo_path.name
 
+        lang_map = {"pl": "pol", "en": "eng", "de": "deu"}
+        language_code = lang_map.get(ctx.language, "pol")
+
         files = {"file": (filename, audio_bytes)}
         data = {
             "model_id": "scribe_v2",
-            "language_code": "pol",
+            "language_code": language_code,
             "timestamps_granularity": "word",
             "tag_audio_events": "false",
             "diarize": "false",

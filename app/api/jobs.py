@@ -91,6 +91,7 @@ async def create_job(
     media: list[UploadFile] = File(...),
     voice_memo: Optional[UploadFile] = File(None),
     transcript: Optional[str] = Form(None),
+    lang: Optional[str] = Form("pl"),
 ):
     """Upload media files + voice memo or typed transcript, create a job, and start the pipeline."""
     if not voice_memo and not transcript:
@@ -103,6 +104,7 @@ async def create_job(
 
     ctx = JobContext()
     ctx.session_id = request.state.session_id
+    ctx.language = lang if lang in ("pl", "en", "de") else "pl"
     job_dir = create_job_dir(ctx.job_id)
     ctx.job_dir = job_dir
 

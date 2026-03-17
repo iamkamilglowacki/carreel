@@ -26,7 +26,7 @@ from app.pipeline.base import BaseAgent
 
 logger = logging.getLogger(__name__)
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm"}
 
 # Auto-split settings

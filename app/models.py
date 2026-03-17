@@ -40,6 +40,9 @@ class JobContext:
     session_id: str = ""
     job_dir: Path = field(default_factory=lambda: Path("."))
 
+    # Language for pipeline (pl, en, de)
+    language: str = "pl"
+
     # Input files
     voice_memo_path: Path | None = None
     raw_media_paths: list[Path] = field(default_factory=list)

@@ -70,7 +70,13 @@ class ElevenLabsVoiceover(BaseAgent):
                 message="No voiceover_text found in script",
             )
 
-        voice_id = settings.elevenlabs_voice_id
+        default_voice = settings.elevenlabs_voice_id
+        voice_ids = {
+            "pl": settings.elevenlabs_voice_id_pl or default_voice,
+            "en": settings.elevenlabs_voice_id_en or default_voice,
+            "de": settings.elevenlabs_voice_id_de or default_voice,
+        }
+        voice_id = voice_ids.get(ctx.language, default_voice)
         if not voice_id:
             return AgentResult(
                 success=False,

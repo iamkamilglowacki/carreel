@@ -29,10 +29,14 @@ class MockVoiceover(BaseAgent):
         aiff_path = ctx.job_dir / "voiceover.aiff"
         wav_path = ctx.job_dir / "voiceover.wav"
 
+        # Pick macOS voice per language
+        voice_map = {"pl": "Zosia", "en": "Samantha", "de": "Anna"}
+        voice = voice_map.get(ctx.language, "Zosia")
+
         # Generate audio using macOS say (explicit voice required — default Siri voice
         # may produce empty files with -o on some systems)
         say_proc = await asyncio.create_subprocess_exec(
-            "say", "-v", "Zosia", "-o", str(aiff_path), voiceover_text,
+            "say", "-v", voice, "-o", str(aiff_path), voiceover_text,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

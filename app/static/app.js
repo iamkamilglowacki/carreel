@@ -1,5 +1,8 @@
 /* CarReel - Alpine.js application logic */
 
+const MAX_FILES = 20;
+const MAX_TOTAL_SIZE_MB = 500;
+
 document.addEventListener("alpine:init", () => {
   Alpine.data("reelApp", () => ({
     // State
@@ -26,8 +29,21 @@ document.addEventListener("alpine:init", () => {
     // File inputs
     mediaFiles: [],
 
+    // Otomoto import
+    otomotoUrl: "",
+    otomotoLoading: false,
+    otomotoError: "",
+    otomotoListing: null,
+    otomotoGenerating: false,
+    otomotoSalesCopy: "",
+    otomotoListingTitle: "",
+
     // Reel preview playback
     reelPaused: true,
+
+    // SSE reconnect
+    _sseRetries: 0,
+    _sseMaxRetries: 3,
 
     pipelineSteps: [
       "transcribe",
@@ -123,6 +139,7 @@ document.addEventListener("alpine:init", () => {
       try {
         const form = new FormData();
         form.append("file", this.recordedBlob, "recording.webm");
+        form.append("lang", getLang());
         const res = await fetch("/api/transcribe", { method: "POST", body: form });
         if (!res.ok) {
           this.uploadError = t("upload.transcribeError") + (await res.text());
@@ -152,7 +169,7 @@ document.addEventListener("alpine:init", () => {
         const res = await fetch("/api/cleanup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: this.typedTranscript }),
+          body: JSON.stringify({ text: this.typedTranscript, lang: getLang() }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -191,6 +208,7 @@ document.addEventListener("alpine:init", () => {
       if (hasRecording && !hasTyped) {
         form.append("voice_memo", this.recordedBlob, "recording.webm");
       }
+      form.append("lang", getLang());
       for (const f of this.mediaFiles) {
         form.append("media", f);
       }
@@ -241,7 +259,86 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
+    // ---------- Otomoto import ----------
+
+    _detectSource(url) {
+      if (url.includes("otomoto.pl")) return "otomoto";
+      if (url.includes("mobile.de")) return "mobile";
+      return null;
+    },
+
+    _isSourceAllowed(source) {
+      const allowed = t("otomoto.allowedSources");
+      return allowed === source;
+    },
+
+    async importOtomoto() {
+      const url = this.otomotoUrl.trim();
+      const source = this._detectSource(url);
+      if (!url || !source || !this._isSourceAllowed(source)) {
+        this.otomotoError = t("otomoto.errorUrl");
+        return;
+      }
+      this.otomotoLoading = true;
+      this.otomotoError = "";
+      this.otomotoListing = null;
+
+      const endpoint = source === "mobile" ? "/api/scrape-mobile" : "/api/scrape-otomoto";
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, lang: getLang() }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || t("otomoto.errorScrape"));
+        }
+        this.otomotoListing = await res.json();
+      } catch (e) {
+        this.otomotoError = e.message;
+      } finally {
+        this.otomotoLoading = false;
+      }
+    },
+
+    async generateFromOtomoto() {
+      const url = this.otomotoUrl.trim();
+      if (!url) return;
+      const source = this._detectSource(url);
+      this.otomotoGenerating = true;
+      this.otomotoError = "";
+      this.otomotoSalesCopy = "";
+
+      const endpoint = source === "mobile" ? "/api/mobile-job" : "/api/otomoto-job";
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, lang: getLang() }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || t("otomoto.errorGenerate"));
+        }
+        const data = await res.json();
+        if (data.sales_copy) {
+          this.otomotoSalesCopy = data.sales_copy;
+        }
+        this.otomotoListingTitle = data.listing?.title || "";
+        this.otomotoUrl = "";
+        this.otomotoListing = null;
+        await this.fetchJobs();
+        this.selectJob(data.job_id);
+      } catch (e) {
+        this.otomotoError = e.message;
+      } finally {
+        this.otomotoGenerating = false;
+      }
+    },
+
     async deleteJob(jobId) {
+      if (!confirm(t("job.confirmDelete"))) return;
       try {
         await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
         if (this.selectedJob && this.selectedJob.job_id === jobId) {
@@ -267,6 +364,7 @@ document.addEventListener("alpine:init", () => {
 
       // If job is still processing, connect to SSE
       if (job.status === "pending" || job.status === "processing") {
+        this._sseRetries = 0;
         this.connectSSE(jobId);
       }
     },
@@ -292,7 +390,7 @@ document.addEventListener("alpine:init", () => {
         } else if (i === currentIdx) {
           status = "active";
         }
-        return { key: s, label: t("steps." + s), status, progress: status === "completed" ? 100 : 0 };
+        return { key: s, label: this.t("steps." + s), status, progress: status === "completed" ? 100 : 0 };
       });
     },
 
@@ -302,6 +400,7 @@ document.addEventListener("alpine:init", () => {
 
       const handleEvent = (e) => {
         const data = JSON.parse(e.data);
+        this._sseRetries = 0;
         this.handleSSEEvent(data);
       };
 
@@ -313,15 +412,22 @@ document.addEventListener("alpine:init", () => {
       es.addEventListener("job_failed", handleEvent);
 
       es.onerror = () => {
-        // Reconnect will be automatic with EventSource, or job is done
         es.close();
         this.eventSource = null;
+
         // Refresh job state
         if (this.selectedJob) {
           this.fetchJob(this.selectedJob.job_id).then((j) => {
             if (j) {
               this.selectedJob = j;
               this.initSteps(j);
+
+              // Retry SSE if job still processing
+              if ((j.status === "pending" || j.status === "processing") && this._sseRetries < this._sseMaxRetries) {
+                this._sseRetries++;
+                const delay = Math.pow(2, this._sseRetries) * 1000;
+                setTimeout(() => this.connectSSE(j.job_id), delay);
+              }
             }
           });
         }
@@ -389,6 +495,12 @@ document.addEventListener("alpine:init", () => {
 
     // ---------- i18n ----------
 
+    t(key) {
+      // Access this.lang to create Alpine reactivity dependency
+      void this.lang;
+      return t(key);
+    },
+
     switchLang(lang) {
       setLang(lang);
       this.lang = lang;
@@ -450,12 +562,32 @@ document.addEventListener("alpine:init", () => {
       e.preventDefault();
       e.currentTarget.classList.remove("drag-over");
       if (e.dataTransfer.files.length > 0) {
-        this.mediaFiles = [...this.mediaFiles, ...Array.from(e.dataTransfer.files)];
+        this.addMediaFiles(e.dataTransfer.files);
       }
     },
 
     addMediaFiles(fileList) {
-      this.mediaFiles = [...this.mediaFiles, ...Array.from(fileList)];
+      const incoming = Array.from(fileList);
+      // Filter to only image/video types
+      const valid = incoming.filter(
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
+      );
+      if (valid.length < incoming.length) {
+        this.uploadError = t("upload.errorInvalidFiles");
+      }
+      // Check max file count
+      const combined = [...this.mediaFiles, ...valid];
+      if (combined.length > MAX_FILES) {
+        this.uploadError = t("upload.errorTooManyFiles");
+        return;
+      }
+      // Check total size
+      const totalBytes = combined.reduce((sum, f) => sum + f.size, 0);
+      if (totalBytes > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+        this.uploadError = t("upload.errorTotalSize");
+        return;
+      }
+      this.mediaFiles = combined;
     },
 
     removeMediaFile(idx) {

@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from app.ffmpeg.commands import concat_videos, overlay_audio_and_captions
+from app.ffmpeg.commands import concat_videos, get_duration, overlay_audio_and_captions
 from app.ffmpeg.runner import run_ffmpeg
 from app.models import AgentResult, JobContext, PipelineStep
 from app.pipeline.base import BaseAgent
@@ -26,7 +26,7 @@ class VideoAssembler(BaseAgent):
                 success=False, step=self.step, message="No voiceover audio available"
             )
 
-        total_steps = 3
+        total_steps = 4
 
         # 1. Write the concat file
         concat_file = ctx.job_dir / "concat.txt"
@@ -43,17 +43,25 @@ class VideoAssembler(BaseAgent):
         if progress:
             await progress(2, total_steps)
 
-        # 3. Overlay audio and captions
+        # 3. Get voiceover duration so the final video matches it exactly
+        if progress:
+            await progress(3, total_steps)
+        audio_duration_str = await run_ffmpeg(get_duration(ctx.voiceover_path))
+        audio_duration = float(audio_duration_str.strip())
+        logger.info("Voiceover duration: %.2fs — video will match this length", audio_duration)
+
+        # 4. Overlay audio and captions, looping video to match audio length
         final_path = ctx.job_dir / "final.mp4"
         cmd_overlay = overlay_audio_and_captions(
             video_path=silent_video,
             audio_path=ctx.voiceover_path,
             captions_path=ctx.captions_path,
             output_path=final_path,
+            audio_duration=audio_duration,
         )
         await run_ffmpeg(cmd_overlay, timeout=180)
         if progress:
-            await progress(3, total_steps)
+            await progress(4, total_steps)
 
         ctx.final_video_path = final_path
         return AgentResult(

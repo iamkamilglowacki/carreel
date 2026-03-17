@@ -23,6 +23,7 @@ def save_job(ctx: JobContext) -> None:
     data = {
         "job_id": ctx.job_id,
         "session_id": ctx.session_id,
+        "language": ctx.language,
         "status": ctx.status.value,
         "current_step": ctx.current_step.value if ctx.current_step else None,
         "error": ctx.error,
@@ -50,6 +51,7 @@ def load_job(job_id: str) -> JobContext | None:
     ctx = JobContext(
         job_id=data["job_id"],
         session_id=data.get("session_id", ""),
+        language=data.get("language", "pl"),
         job_dir=get_job_dir(job_id),
         status=JobStatus(data["status"]),
         current_step=data.get("current_step"),

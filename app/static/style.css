@@ -1,5 +1,10 @@
 /* CarReel - Custom styles beyond Tailwind */
 
+/* Prevent Alpine.js FOUC */
+[x-cloak] {
+    display: none !important;
+}
+
 /* Smooth transitions for step indicators */
 .step-indicator {
     transition: all 0.3s ease;

@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     elevenlabs_api_key: str = ""
     elevenlabs_voice_id: str = ""
+    elevenlabs_voice_id_pl: str = ""
+    elevenlabs_voice_id_en: str = ""
+    elevenlabs_voice_id_de: str = ""
+
+    # External scraping
+    scrapingbee_api_key: str = ""
+
+    # Legacy (unused, kept for .env compatibility)
+    enable_whatsapp: bool = False
 
     # Storage
     data_dir: Path = Path("./data")

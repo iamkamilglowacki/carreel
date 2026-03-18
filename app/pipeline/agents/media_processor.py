@@ -13,6 +13,9 @@ import logging
 import random
 from pathlib import Path
 
+from PIL import Image
+from pillow_heif import register_heif_opener
+
 from app.ffmpeg.commands import (
     crop_video_to_portrait,
     get_duration,
@@ -24,9 +27,13 @@ from app.ffmpeg.runner import run_ffmpeg
 from app.models import AgentResult, JobContext, PipelineStep
 from app.pipeline.base import BaseAgent
 
+# Register HEIF/HEIC support in Pillow
+register_heif_opener()
+
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif"}
+HEIF_EXTS = {".heic", ".heif"}
 VIDEO_EXTS = {".mp4", ".mov", ".avi", ".webm"}
 
 # Auto-split settings
@@ -53,6 +60,33 @@ def _classify_media(path: Path, probe_data: dict | None = None) -> str:
                     return "video"
         return "image"
     return "image"
+
+
+def _needs_conversion(path: Path) -> bool:
+    """Check if a file needs to be converted to JPEG (HEIC, HEIF, or unknown extension)."""
+    ext = path.suffix.lower()
+    if ext in HEIF_EXTS:
+        return True
+    # Files with no extension or unrecognised extension — try to detect HEIF by header
+    if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
+        try:
+            header = path.read_bytes()[:12]
+            # HEIF/HEIC files have 'ftyp' at offset 4
+            if b"ftyp" in header[:12]:
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def _convert_to_jpeg(path: Path) -> Path:
+    """Convert an image (HEIC/HEIF/unknown) to JPEG, return new path."""
+    jpeg_path = path.with_suffix(".jpg")
+    img = Image.open(path)
+    img = img.convert("RGB")
+    img.save(jpeg_path, "JPEG", quality=92)
+    logger.info("Converted %s → %s", path.name, jpeg_path.name)
+    return jpeg_path
 
 
 async def _get_video_duration(path: Path) -> float:
@@ -127,6 +161,14 @@ class MediaProcessor(BaseAgent):
             return AgentResult(
                 success=False, step=self.step, message="No raw media files provided"
             )
+
+        # Phase 0: Convert HEIC/HEIF and unknown-extension images to JPEG
+        for i, path in enumerate(raw_paths):
+            if _needs_conversion(path):
+                try:
+                    raw_paths[i] = _convert_to_jpeg(path)
+                except Exception as exc:
+                    logger.warning("Failed to convert %s: %s — skipping", path.name, exc)
 
         # Phase 1: Classify all media
         images: list[Path] = []

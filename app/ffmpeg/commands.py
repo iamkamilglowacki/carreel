@@ -159,18 +159,13 @@ def overlay_audio_and_captions(
     """Merge video + audio + burn-in ASS subtitles into final output.
 
     This is the ONLY encoding pass in the assembly phase.
-    When audio_duration is provided, the video is looped to match
-    the voiceover length exactly.
+    When audio_duration is provided, the video is trimmed to that length
+    (the caller is responsible for ensuring the video is long enough).
     """
     vf_filter = f"ass={captions_path}" if captions_path else "null"
 
-    cmd = ["ffmpeg", "-y"]
-
-    if audio_duration is not None:
-        # Loop the video indefinitely and trim to audio length
-        cmd += ["-stream_loop", "-1"]
-
-    cmd += [
+    cmd = [
+        "ffmpeg", "-y",
         "-i", str(video_path),
         "-i", str(audio_path),
         "-vf", vf_filter,

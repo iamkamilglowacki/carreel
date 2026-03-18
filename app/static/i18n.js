@@ -4,6 +4,9 @@ const translations = {
   pl: {
     "header.subtitle": "Generator Rolek Samochodowych",
 
+    "tabs.fromUrl": "Z ogłoszenia",
+    "tabs.fromMedia": "Własne media",
+
     "upload.title": "Nowa Rolka",
     "upload.carDescription": "Opis Samochodu",
     "upload.tabRecord": "Nagrywanie",
@@ -72,6 +75,9 @@ const translations = {
   en: {
     "header.subtitle": "Car Reel Generator",
 
+    "tabs.fromUrl": "From listing",
+    "tabs.fromMedia": "Own media",
+
     "upload.title": "New Reel",
     "upload.carDescription": "Car Description",
     "upload.tabRecord": "Record",
@@ -139,6 +145,9 @@ const translations = {
 
   de: {
     "header.subtitle": "Auto-Reel-Generator",
+
+    "tabs.fromUrl": "Aus Inserat",
+    "tabs.fromMedia": "Eigene Medien",
 
     "upload.title": "Neues Reel",
     "upload.carDescription": "Fahrzeugbeschreibung",

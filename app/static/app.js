@@ -42,6 +42,9 @@ document.addEventListener("alpine:init", () => {
     // WhatsApp is localhost-only
     isLocal: ["localhost", "127.0.0.1"].includes(window.location.hostname),
 
+    // Create reel tab (url or manual)
+    createTab: "url",
+
     // Reel preview playback
     reelPaused: true,
 
@@ -508,11 +511,8 @@ document.addEventListener("alpine:init", () => {
 
     switchLang(lang) {
       setLang(lang);
-      this.lang = lang;
-      // Re-init step labels if job is selected
-      if (this.selectedJob) {
-        this.initSteps(this.selectedJob);
-      }
+      // Navigate to the language subpage
+      window.location.href = "/" + lang;
     },
 
     // ---------- Helpers ----------

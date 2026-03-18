@@ -1,11 +1,55 @@
 """FastAPI application entry point."""
 
 import logging
+import logging.handlers
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+
+class DiscordHandler(logging.Handler):
+    """Send ERROR+ log records to a Discord webhook (non-blocking)."""
+
+    def __init__(self, webhook_url: str):
+        super().__init__(level=logging.ERROR)
+        self.webhook_url = webhook_url
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            # Truncate to Discord's 2000 char limit
+            if len(msg) > 1950:
+                msg = msg[:1950] + "..."
+            # Fire-and-forget in a thread to never block the event loop
+            threading.Thread(
+                target=self._send, args=(msg,), daemon=True
+            ).start()
+        except Exception:
+            self.handleError(record)
+
+    def _send(self, message: str) -> None:
+        try:
+            httpx.post(
+                self.webhook_url,
+                json={"content": f"```\n{message}\n```"},
+                timeout=5,
+            )
+        except Exception:
+            pass  # don't crash the app over a notification failure
+
+
+_discord_url = (
+    "https://discord.com/api/webhooks/"
+    "1483808630930276432/Q9tWUJu4abO1kNfFubHdx9yDKnPEbVWhtVqf8zn_K_p6pUpk-yu1pDNYtohtEU6zcP4w"
+)
+_discord_handler = DiscordHandler(_discord_url)
+_discord_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+logging.getLogger().addHandler(_discord_handler)
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -66,9 +110,31 @@ app.add_middleware(SessionMiddleware)
 
 # Mount API router
 from app.api.router import api_router  # noqa: E402
+from fastapi.responses import HTMLResponse, RedirectResponse  # noqa: E402
 
 app.include_router(api_router)
 
-# Mount static files last (catch-all for the SPA)
+# Language routes — serve index.html with lang preset
 static_dir = Path(__file__).parent / "static"
-app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+_index_html = (static_dir / "index.html").read_text(encoding="utf-8")
+
+SUPPORTED_LANGS = {"pl", "en", "de"}
+
+
+@app.get("/")
+async def root_redirect():
+    return RedirectResponse(url="/pl", status_code=302)
+
+
+@app.get("/pl")
+@app.get("/en")
+@app.get("/de")
+async def lang_page(request: Request):
+    lang = request.url.path.strip("/")
+    lang_script = f'<script>localStorage.setItem("lang","{lang}")</script>'
+    html = _index_html.replace("</head>", f"{lang_script}\n</head>")
+    return HTMLResponse(html)
+
+
+# Mount static files for JS/CSS/images (no html=True so it won't catch /)
+app.mount("/", StaticFiles(directory=str(static_dir)), name="static")

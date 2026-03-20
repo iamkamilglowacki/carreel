@@ -18,6 +18,7 @@ from pillow_heif import register_heif_opener
 
 from app.ffmpeg.commands import (
     crop_video_to_portrait,
+    filmstrip_scroll,
     get_duration,
     ken_burns_from_image,
     probe_media,
@@ -199,40 +200,60 @@ class MediaProcessor(BaseAgent):
             all_video_plans.extend(plans)
             clip_idx += len(plans)
 
-        # Plan image Ken Burns commands
-        zoom_directions = ["in", "out"]
-        image_duration = 2.5
+        # Plan image processing — depends on source
+        filmstrip_path: Path | None = None
+        filmstrip_cmd: list[str] | None = None
         all_image_plans: list[tuple[Path, list[str]]] = []
-        for i, img_path in enumerate(images):
-            output_path = ctx.job_dir / f"clip_{clip_idx:03d}.mp4"
-            zoom = zoom_directions[i % len(zoom_directions)]
-            cmd = ken_burns_from_image(img_path, output_path, image_duration, zoom)
-            all_image_plans.append((output_path, cmd))
+
+        if images and ctx.source == "listing":
+            # Listing photos (horizontal) → filmstrip vertical scroll
+            filmstrip_path = ctx.job_dir / f"clip_{clip_idx:03d}.mp4"
+            filmstrip_duration = len(images) * 2.5
+            filmstrip_cmd = filmstrip_scroll(images, filmstrip_path, filmstrip_duration)
             clip_idx += 1
+        elif images:
+            # User uploads (vertical/mixed) → individual slide left/right clips
+            slide_directions = ["right", "left"]
+            image_duration = 2.5
+            for i, img_path in enumerate(images):
+                output_path = ctx.job_dir / f"clip_{clip_idx:03d}.mp4"
+                slide = slide_directions[i % len(slide_directions)]
+                cmd = ken_burns_from_image(img_path, output_path, image_duration, slide)
+                all_image_plans.append((output_path, cmd))
+                clip_idx += 1
 
         # Phase 3: Execute ALL ffmpeg commands in parallel (bounded by semaphore)
-        total_tasks = len(all_video_plans) + len(all_image_plans)
+        total_tasks = len(all_video_plans) + len(all_image_plans) + (1 if filmstrip_cmd else 0)
 
         async def _run_one(cmd: list[str]) -> None:
             nonlocal done_counter
             async with semaphore:
-                await run_ffmpeg(cmd, timeout=120)
+                await run_ffmpeg(cmd, timeout=300)
             done_counter += 1
             if progress:
                 await progress(done_counter, total_tasks)
 
-        all_tasks = [
-            _run_one(cmd)
-            for _, cmd in all_video_plans + all_image_plans
-        ]
+        all_tasks = [_run_one(cmd) for _, cmd in all_video_plans]
+        all_tasks += [_run_one(cmd) for _, cmd in all_image_plans]
+        if filmstrip_cmd:
+            all_tasks.append(_run_one(filmstrip_cmd))
         await asyncio.gather(*all_tasks)
 
         # Collect results in planned order
         video_clips = [path for path, _ in all_video_plans]
         image_clips = [path for path, _ in all_image_plans]
 
-        # Phase 4: Interleave video fragments and images
-        if video_clips and image_clips:
+        # Phase 4: Combine clips
+        processed: list[Path] = []
+        if filmstrip_path:
+            # Listing mode: filmstrip is one continuous clip
+            if video_clips:
+                mid = len(video_clips) // 2
+                processed = video_clips[:mid] + [filmstrip_path] + video_clips[mid:]
+            else:
+                processed = [filmstrip_path]
+        elif video_clips and image_clips:
+            # Upload mode: interleave video fragments and image slides
             processed = _interleave(video_clips, image_clips)
         else:
             processed = video_clips or image_clips
@@ -247,5 +268,5 @@ class MediaProcessor(BaseAgent):
             success=True,
             step=self.step,
             message=f"Processed {len(processed)} clips "
-                    f"({len(video_clips)} video fragments + {len(image_clips)} images, interleaved)",
+                    f"({len(video_clips)} video fragments + {len(images)} images)",
         )

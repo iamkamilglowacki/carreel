@@ -47,6 +47,9 @@ document.addEventListener("alpine:init", () => {
 
     // Reel preview playback
     reelPaused: true,
+    reelCurrentTime: 0,
+    reelDuration: 0,
+    _reelRAF: null,
 
     // SSE reconnect
     _sseRetries: 0,
@@ -309,6 +312,11 @@ document.addEventListener("alpine:init", () => {
       }
     },
 
+    removeListingPhoto(idx) {
+      if (!this.otomotoListing) return;
+      this.otomotoListing.photo_urls = this.otomotoListing.photo_urls.filter((_, i) => i !== idx);
+    },
+
     async generateFromOtomoto() {
       const url = this.otomotoUrl.trim();
       if (!url) return;
@@ -317,12 +325,13 @@ document.addEventListener("alpine:init", () => {
       this.otomotoError = "";
       this.otomotoSalesCopy = "";
 
+      const photoUrls = this.otomotoListing ? this.otomotoListing.photo_urls : null;
       const endpoint = source === "mobile" ? "/api/mobile-job" : "/api/otomoto-job";
       try {
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, lang: getLang() }),
+          body: JSON.stringify({ url, lang: getLang(), photo_urls: photoUrls }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -490,8 +499,12 @@ document.addEventListener("alpine:init", () => {
 
     closeJob() {
       this.closeEventSource();
+      this._stopTimeTracking();
       this.selectedJob = null;
       this.steps = [];
+      this.reelPaused = true;
+      this.reelCurrentTime = 0;
+      this.reelDuration = 0;
     },
 
     closeEventSource() {
@@ -599,6 +612,113 @@ document.addEventListener("alpine:init", () => {
       this.mediaFiles = this.mediaFiles.filter((_, i) => i !== idx);
     },
 
+    // ---------- Otomoto search link from mobile.de data ----------
+
+    buildOtomotoSearchUrl() {
+      const l = this.otomotoListing;
+      if (!l || !l.make) return null;
+
+      // Make slug mapping: mobile.de name → otomoto URL slug
+      const makeMap = {
+        "Abarth": "abarth", "Alfa Romeo": "alfa-romeo", "Audi": "audi",
+        "BMW": "bmw", "Chevrolet": "chevrolet", "Chrysler": "chrysler",
+        "Citroën": "citroen", "Cupra": "cupra", "Dacia": "dacia",
+        "DS": "ds-automobiles", "Dodge": "dodge", "Fiat": "fiat",
+        "Ford": "ford", "Honda": "honda", "Hyundai": "hyundai",
+        "Infiniti": "infiniti", "Jaguar": "jaguar", "Jeep": "jeep",
+        "Kia": "kia", "Lancia": "lancia", "Land Rover": "land-rover",
+        "Lexus": "lexus", "Maserati": "maserati", "Mazda": "mazda",
+        "Mercedes-Benz": "mercedes-benz", "MINI": "mini", "Mitsubishi": "mitsubishi",
+        "Nissan": "nissan", "Opel": "opel", "Peugeot": "peugeot",
+        "Porsche": "porsche", "Renault": "renault", "Seat": "seat",
+        "Škoda": "skoda", "Skoda": "skoda", "Smart": "smart",
+        "Subaru": "subaru", "Suzuki": "suzuki", "Tesla": "tesla",
+        "Toyota": "toyota", "Volkswagen": "volkswagen", "Volvo": "volvo",
+      };
+
+      // Model slug mapping: mobile.de model → otomoto slug
+      const modelMap = {
+        // BMW
+        "1er": "seria-1", "2er": "seria-2", "3er": "seria-3", "4er": "seria-4",
+        "5er": "seria-5", "6er": "seria-6", "7er": "seria-7", "8er": "seria-8",
+        "X1": "x1", "X2": "x2", "X3": "x3", "X4": "x4", "X5": "x5", "X6": "x6", "X7": "x7",
+        "Z4": "z4", "i3": "i3", "i4": "i4", "i5": "i5", "i7": "i7", "iX": "ix", "iX3": "ix3",
+        // Mercedes
+        "A-Klasse": "klasa-a", "B-Klasse": "klasa-b", "C-Klasse": "klasa-c",
+        "E-Klasse": "klasa-e", "S-Klasse": "klasa-s", "G-Klasse": "klasa-g",
+        "V-Klasse": "klasa-v", "CLA": "cla", "CLS": "cls", "GLA": "gla",
+        "GLB": "glb", "GLC": "glc", "GLE": "gle", "GLS": "gls", "AMG GT": "amg-gt",
+        "EQA": "eqa", "EQB": "eqb", "EQC": "eqc", "EQE": "eqe", "EQS": "eqs",
+        // Audi
+        "A1": "a1", "A3": "a3", "A4": "a4", "A5": "a5", "A6": "a6", "A7": "a7", "A8": "a8",
+        "Q2": "q2", "Q3": "q3", "Q4 e-tron": "q4-e-tron", "Q5": "q5", "Q7": "q7", "Q8": "q8",
+        "e-tron": "e-tron", "e-tron GT": "e-tron-gt", "TT": "tt", "R8": "r8",
+        // VW
+        "Golf": "golf", "Passat": "passat", "Polo": "polo", "Tiguan": "tiguan",
+        "T-Roc": "t-roc", "T-Cross": "t-cross", "Touareg": "touareg",
+        "Touran": "touran", "Arteon": "arteon", "ID.3": "id.3", "ID.4": "id.4", "ID.5": "id.5",
+        "Caddy": "caddy", "Multivan": "multivan", "Transporter": "transporter",
+      };
+
+      // Fuel type mapping: German → Otomoto enum value
+      const fuelMap = {
+        "Benzin": "petrol", "Diesel": "diesel", "Elektro": "electric",
+        "Hybrid (Benzin/Elektro)": "hybrid", "Hybrid (Diesel/Elektro)": "hybrid",
+        "Plug-in-Hybrid": "hybrid", "Erdgas (CNG)": "cng", "Autogas (LPG)": "petrol-lpg",
+        "Wasserstoff": "hydrogen",
+      };
+
+      const makeSlug = makeMap[l.make] || l.make.toLowerCase().replace(/\s+/g, "-");
+      const modelSlug = modelMap[l.model] || l.model.toLowerCase().replace(/\s+/g, "-");
+
+      // Extract year from "Erstzulassung" (e.g. "03/2020" or "2020")
+      let year = "";
+      if (l.year) {
+        const ym = l.year.match(/(\d{4})/);
+        if (ym) year = ym[1];
+      }
+
+      // Extract mileage number (e.g. "85.000 km" → 85000)
+      let mileageNum = 0;
+      if (l.mileage) {
+        const cleaned = l.mileage.replace(/[.\s]/g, "").replace(/,/g, "");
+        const mm = cleaned.match(/(\d+)/);
+        if (mm) mileageNum = parseInt(mm[1], 10);
+      }
+
+      // Build URL
+      let path = `https://www.otomoto.pl/osobowe/${makeSlug}`;
+      if (modelSlug) path += `/${modelSlug}`;
+      if (year) path += `/od-${year}`;
+
+      const params = new URLSearchParams();
+      if (year) {
+        params.set("search[filter_float_year:to]", year);
+      }
+
+      // Fuel type
+      const fuelVal = fuelMap[l.fuel_type];
+      if (fuelVal) {
+        params.set("search[filter_enum_fuel_type]", fuelVal);
+      }
+
+      // Mileage range: ±20%
+      if (mileageNum > 0) {
+        const from = Math.max(0, Math.round(mileageNum * 0.8 / 5000) * 5000);
+        const to = Math.round(mileageNum * 1.2 / 5000) * 5000;
+        params.set("search[filter_float_mileage:from]", String(from));
+        params.set("search[filter_float_mileage:to]", String(to));
+      }
+
+      const qs = params.toString();
+      return qs ? `${path}?${qs}` : path;
+    },
+
+    openOtomotoSearch() {
+      const url = this.buildOtomotoSearchUrl();
+      if (url) window.open(url, "_blank");
+    },
+
     // WhatsApp — localhost only
     openWhatsApp() {
       if (!this.otomotoPhoneNumber || !this.selectedJob) return;
@@ -627,15 +747,53 @@ document.addEventListener("alpine:init", () => {
         video.play().then(() => {
           video.muted = false;
           this.reelPaused = false;
+          this._startTimeTracking(video);
         }).catch(() => {
-          // Autoplay blocked — try muted
           video.muted = true;
-          video.play().then(() => { this.reelPaused = false; });
+          video.play().then(() => {
+            this.reelPaused = false;
+            this._startTimeTracking(video);
+          });
         });
       } else {
         video.pause();
         this.reelPaused = true;
+        this._stopTimeTracking();
       }
+    },
+
+    _startTimeTracking(video) {
+      this._stopTimeTracking();
+      const tick = () => {
+        this.reelCurrentTime = video.currentTime || 0;
+        this.reelDuration = video.duration || 0;
+        this._reelRAF = requestAnimationFrame(tick);
+      };
+      tick();
+    },
+
+    _stopTimeTracking() {
+      if (this._reelRAF) {
+        cancelAnimationFrame(this._reelRAF);
+        this._reelRAF = null;
+      }
+    },
+
+    seekReel(event) {
+      const video = this.$refs.reelVideo;
+      if (!video || !video.duration) return;
+      const bar = event.currentTarget;
+      const rect = bar.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      video.currentTime = ratio * video.duration;
+      this.reelCurrentTime = video.currentTime;
+    },
+
+    formatTime(sec) {
+      if (!sec || !isFinite(sec)) return "0:00";
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return m + ":" + (s < 10 ? "0" : "") + s;
     },
   }));
 });

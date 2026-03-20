@@ -133,19 +133,28 @@
               <span class="mx-1">&middot;</span>
               <span x-text="otomotoListing.location"></span>
             </p>
-            <!-- Photo preview -->
-            <div class="flex gap-2 overflow-x-auto pb-2 mb-4" x-show="otomotoListing.photo_urls.length > 0">
-              <template x-for="(url, idx) in otomotoListing.photo_urls.slice(0, 6)" :key="idx">
-                <img :src="url" :alt="otomotoListing.title" class="h-20 w-auto rounded-md object-cover flex-shrink-0 border border-slate-600" />
+            <!-- Photo preview with remove buttons — 3 rows grid -->
+            <div class="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2 mb-4" x-show="otomotoListing.photo_urls.length > 0">
+              <template x-for="(url, idx) in otomotoListing.photo_urls" :key="url">
+                <div class="relative group aspect-square">
+                  <img :src="url" :alt="otomotoListing.title" class="w-full h-full rounded-md object-cover border border-slate-600" />
+                  <button
+                    @click="removeListingPhoto(idx)"
+                    class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 focus:outline-none"
+                    :aria-label="'Remove photo ' + (idx + 1)"
+                  >
+                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </template>
-              <div x-show="otomotoListing.photo_urls.length > 6" class="h-20 w-20 rounded-md bg-slate-700 flex items-center justify-center flex-shrink-0 text-sm text-slate-400">
-                +<span x-text="otomotoListing.photo_urls.length - 6"></span>
-              </div>
             </div>
+            <div class="flex flex-wrap gap-3">
             <button
               @click="generateFromOtomoto()"
               :disabled="otomotoGenerating"
-              class="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+              class="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900"
             >
               <span x-show="!otomotoGenerating" x-text="t('otomoto.generate')"></span>
               <span x-show="otomotoGenerating" class="flex items-center gap-2">
@@ -156,6 +165,18 @@
                 <span x-text="t('otomoto.generating')"></span>
               </span>
             </button>
+            <!-- Search on Otomoto button — only for mobile.de imports -->
+            <button
+              x-show="buildOtomotoSearchUrl() && _detectSource(otomotoUrl) === 'mobile'"
+              @click="openOtomotoSearch()"
+              class="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span x-text="t('otomoto.searchOtomoto')"></span>
+            </button>
+            </div>
           </div>
         </template>
 
@@ -343,11 +364,12 @@
         <!-- iPhone mockup: PNG frame overlay on video -->
         <div class="relative mx-auto w-[300px]">
           <!-- Video behind the frame — inset to fit the screen area -->
-          <div class="absolute top-[1.6%] left-[3.8%] right-[3.8%] bottom-[1.6%] rounded-[28px] overflow-hidden bg-black z-0">
+          <div class="absolute top-[1.73%] left-[4.13%] right-[4.13%] bottom-[1.73%] rounded-[28px] overflow-hidden bg-black z-0">
             <video
               x-ref="reelVideo"
               class="w-full h-full object-cover pointer-events-none"
               :src="selectedJob?.has_final_video ? '/api/jobs/' + selectedJob.job_id + '/output' : ''"
+              @loadedmetadata="reelDuration = $refs.reelVideo.duration || 0"
               playsinline
               loop
               muted
@@ -438,7 +460,7 @@
           <!-- PNG frame on top — covers bezels perfectly -->
           <img src="/iphone-frame.png" class="relative z-10 w-full h-auto pointer-events-none select-none" draggable="false" alt="" />
           <!-- Clickable layer above frame for play/pause -->
-          <div class="absolute top-[1.6%] left-[3.8%] right-[3.8%] bottom-[1.6%] z-20 cursor-pointer rounded-[28px]" @click="toggleReelPlay($refs.reelVideo)"></div>
+          <div class="absolute top-[1.73%] left-[4.13%] right-[4.13%] bottom-[1.73%] z-20 cursor-pointer rounded-[28px]" @click="toggleReelPlay($refs.reelVideo)"></div>
 
           <!-- Play/pause indicator — centered on entire phone -->
           <div x-show="reelPaused" x-transition.opacity class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
@@ -447,6 +469,30 @@
             </div>
           </div>
         </div><!-- /iPhone mockup -->
+
+        <!-- Playback controls -->
+        <div class="mt-4 mx-auto w-[300px] flex items-center gap-3">
+          <!-- Play/Pause button -->
+          <button @click="toggleReelPlay($refs.reelVideo)" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- Play icon -->
+            <svg x-show="reelPaused" class="w-4 h-4 ml-0.5" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <!-- Pause icon -->
+            <svg x-show="!reelPaused" x-cloak class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+          </button>
+
+          <!-- Time current -->
+          <span class="text-xs text-slate-400 font-mono w-9 text-right flex-shrink-0" x-text="formatTime(reelCurrentTime)"></span>
+
+          <!-- Progress bar -->
+          <div class="flex-1 h-2 bg-slate-700 rounded-full cursor-pointer relative group" @click="seekReel($event)">
+            <div class="h-full bg-blue-500 rounded-full transition-[width] duration-100" :style="'width:' + (reelDuration > 0 ? (reelCurrentTime / reelDuration * 100) : 0) + '%'"></div>
+            <!-- Thumb -->
+            <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" :style="'left: calc(' + (reelDuration > 0 ? (reelCurrentTime / reelDuration * 100) : 0) + '% - 6px)'"></div>
+          </div>
+
+          <!-- Time total -->
+          <span class="text-xs text-slate-400 font-mono w-9 flex-shrink-0" x-text="formatTime(reelDuration)"></span>
+        </div>
 
         <!-- Download & WhatsApp buttons -->
         <div class="mt-6 flex flex-col items-center gap-3">

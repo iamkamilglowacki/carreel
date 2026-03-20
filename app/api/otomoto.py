@@ -22,6 +22,7 @@ router = APIRouter()
 class OtomotoRequest(BaseModel):
     url: str
     lang: str = "pl"
+    photo_urls: list[str] | None = None
 
 
 @router.post("/scrape-otomoto")
@@ -48,6 +49,10 @@ async def create_otomoto_job(request: Request, body: OtomotoRequest):
         logger.exception("Failed to scrape Otomoto URL: %s", body.url)
         raise HTTPException(status_code=502, detail=f"Nie udało się pobrać ogłoszenia: {exc}")
 
+    # Use user-curated photo list if provided (photos removed in preview)
+    if body.photo_urls is not None:
+        listing.photo_urls = body.photo_urls
+
     if not listing.photo_urls:
         raise HTTPException(status_code=400, detail="Ogłoszenie nie zawiera zdjęć.")
 
@@ -56,6 +61,7 @@ async def create_otomoto_job(request: Request, body: OtomotoRequest):
     ctx = JobContext()
     ctx.session_id = request.state.session_id
     ctx.language = body.lang if body.lang in ("pl", "en", "de") else "pl"
+    ctx.source = "listing"
     job_dir = create_job_dir(ctx.job_id)
     ctx.job_dir = job_dir
 

@@ -1,10 +1,13 @@
-"""Generate an ASS subtitle file with Captions-app-style word-by-word animation.
+"""Generate an ASS subtitle file with premium word-by-word animation.
 
-Each word pops in with a scale animation and gets a colored highlight,
-one or two words at a time, large and centered — similar to the Captions app.
+Inspired by Captions/CapCut/Submagic — each word pops in with a bouncy
+scale + color animation, displayed on a pill-shaped semi-transparent
+background, 3-4 words at a time with dynamic grouping.
 """
 
 import logging
+import math
+from pathlib import Path
 from typing import Any
 
 from app.models import AgentResult, JobContext, PipelineStep
@@ -15,15 +18,32 @@ logger = logging.getLogger(__name__)
 PLAY_RES_X = 1080
 PLAY_RES_Y = 1920
 
-# How many words to show at once
-WORDS_PER_GROUP = 2
+# --- Dynamic grouping config ---
+# Target 3-4 words per group, but adapt to word lengths
+MAX_CHARS_PER_GROUP = 22  # max characters before forcing a new group
+MAX_WORDS_PER_GROUP = 4
+MIN_WORDS_PER_GROUP = 2
 
-# Highlight color (yellow-orange like Captions app) in ASS BGR: &H00aaFF = orange
-HIGHLIGHT_COLOR = "&H0000CCFF"  # bright yellow-orange
-NORMAL_COLOR = "&H00FFFFFF"     # white
-SHADOW_COLOR = "&H80000000"     # semi-transparent black
+# --- Colors (ASS BGR format) ---
+HIGHLIGHT_COLOR = "&H0000DDFF"   # warm amber/gold
+NORMAL_COLOR = "&H00FFFFFF"      # white
+OUTLINE_COLOR = "&H40000000"     # subtle dark outline
+BOX_COLOR = "&HC0000000"         # pill background: 75% opaque black
 
-ASS_HEADER = rf"""[Script Info]
+# --- Font config ---
+FONT_NAME = "Montserrat"
+FONT_SIZE = 68
+
+# Resolve bundled font file for FFmpeg fontsdir
+_FONTS_DIR = Path(__file__).resolve().parent.parent.parent / "fonts"
+
+
+def get_fonts_dir() -> Path:
+    """Return the path to the bundled fonts directory."""
+    return _FONTS_DIR
+
+
+ASS_HEADER = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {PLAY_RES_X}
 PlayResY: {PLAY_RES_Y}
@@ -31,8 +51,9 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Word,Montserrat,72,{NORMAL_COLOR},{NORMAL_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,5,80,80,460,1
-Style: WordActive,Montserrat,72,{HIGHLIGHT_COLOR},{HIGHLIGHT_COLOR},&H00000000,{SHADOW_COLOR},-1,0,0,0,100,100,2,0,1,4,2,5,80,80,460,1
+Style: Box,{FONT_NAME},{FONT_SIZE},{NORMAL_COLOR},{NORMAL_COLOR},{OUTLINE_COLOR},{BOX_COLOR},-1,0,0,0,100,100,2,0,3,4,0,5,60,60,440,1
+Style: Word,{FONT_NAME},{FONT_SIZE},{NORMAL_COLOR},{NORMAL_COLOR},{OUTLINE_COLOR},{BOX_COLOR},-1,0,0,0,100,100,2,0,3,4,0,5,60,60,440,1
+Style: WordActive,{FONT_NAME},{FONT_SIZE},{HIGHLIGHT_COLOR},{HIGHLIGHT_COLOR},{OUTLINE_COLOR},{BOX_COLOR},-1,0,0,0,100,100,2,0,3,4,0,5,60,60,440,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -47,61 +68,96 @@ def _format_ts(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
+def _group_words(timestamps: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Dynamically group words based on character count and word count.
+
+    Aims for natural reading chunks of 3-4 words, breaking earlier
+    if the total character count exceeds MAX_CHARS_PER_GROUP.
+    """
+    groups: list[list[dict[str, Any]]] = []
+    current_group: list[dict[str, Any]] = []
+    current_chars = 0
+
+    for ts in timestamps:
+        word_len = len(ts["word"])
+
+        # Check if adding this word would exceed limits
+        would_exceed_chars = (current_chars + word_len + (1 if current_group else 0)) > MAX_CHARS_PER_GROUP
+        would_exceed_words = len(current_group) >= MAX_WORDS_PER_GROUP
+
+        if current_group and (would_exceed_chars or would_exceed_words):
+            groups.append(current_group)
+            current_group = []
+            current_chars = 0
+
+        current_group.append(ts)
+        current_chars += word_len + (1 if len(current_group) > 1 else 0)
+
+    if current_group:
+        # Avoid single-word orphan at end — merge with previous group
+        if len(current_group) == 1 and len(groups) > 0 and len(groups[-1]) < MAX_WORDS_PER_GROUP:
+            groups[-1].extend(current_group)
+        else:
+            groups.append(current_group)
+
+    return groups
+
+
 def _build_dialogue_lines(timestamps: list[dict[str, Any]]) -> list[str]:
-    """Build ASS Dialogue lines with Captions-style word animation.
+    """Build ASS Dialogue lines with premium word-by-word animation.
 
     For each group of words:
-    - All words show in white
-    - The currently spoken word gets highlighted in color with a pop-in scale effect
+    - Pill-shaped background (via BorderStyle 3 = opaque box)
+    - Active word highlighted in gold with bouncy pop-in (overshoot + settle)
+    - Inactive words in white at normal scale
     """
     lines: list[str] = []
-
-    # Group words into display groups (1-2 words at a time)
-    groups: list[list[dict[str, Any]]] = []
-    for i in range(0, len(timestamps), WORDS_PER_GROUP):
-        groups.append(timestamps[i : i + WORDS_PER_GROUP])
+    groups = _group_words(timestamps)
 
     for group in groups:
         group_start = group[0]["start"]
         group_end = group[-1]["end"]
 
-        # Build the full display text for this group
         upper_words = [w["word"].upper() for w in group]
-        full_text = " ".join(upper_words)
 
         for word_idx, ts in enumerate(group):
             w_start = ts["start"]
             w_end = ts["end"]
-            word_upper = ts["word"].upper()
+            word_duration_ms = (w_end - w_start) * 1000
 
-            # Pop-in animation: scale from 85% to 105% then settle at 100%
-            # \t(t1,t2,\fscx105\fscy105) then \t(t2,t3,\fscx100\fscy100)
-            pop_duration = min(80, (w_end - w_start) * 1000 * 0.3)
+            # Bouncy pop animation timing
+            # Phase 1: quick scale up (overshoot) — ~30% of word duration, max 100ms
+            pop_up = min(100, word_duration_ms * 0.3)
+            # Phase 2: settle back — ~20% of word duration, max 80ms
+            pop_settle = min(80, word_duration_ms * 0.2)
 
-            # Build text with inline color override for the active word
+            # Build text with inline overrides for each word
             parts = []
             for j, w in enumerate(upper_words):
                 if j == word_idx:
-                    # Active word: highlight color + pop scale
+                    # Active word: gold color + bouncy scale (80% → 112% → 100%)
                     parts.append(
-                        rf"{{\c{HIGHLIGHT_COLOR}\fscx85\fscy85"
-                        rf"\t(0,{pop_duration:.0f},\fscx107\fscy107)"
-                        rf"\t({pop_duration:.0f},{pop_duration * 2:.0f},\fscx100\fscy100)"
+                        rf"{{\c{HIGHLIGHT_COLOR}\fscx80\fscy80"
+                        rf"\t(0,{pop_up:.0f},\fscx112\fscy112)"
+                        rf"\t({pop_up:.0f},{pop_up + pop_settle:.0f},\fscx100\fscy100)"
                         rf"}}{w}"
                     )
                 else:
-                    # Inactive word: white, normal scale
+                    # Inactive word: white, steady
                     parts.append(rf"{{\c{NORMAL_COLOR}\fscx100\fscy100}}{w}")
 
             text = " ".join(parts)
 
+            # Layer 1: active word animation line
             lines.append(
                 f"Dialogue: 1,{_format_ts(w_start)},{_format_ts(w_end)},Word,,0,0,0,,{text}"
             )
 
-        # Also show the group text in white as a base layer during gaps
-        # (prevents flicker between words in the same group)
-        base_text = rf"{{\c{NORMAL_COLOR}}}" + full_text
+        # Layer 0: base group text — prevents flicker between word transitions
+        base_parts = []
+        for w in upper_words:
+            base_parts.append(rf"{{\c{NORMAL_COLOR}\fscx100\fscy100}}{w}")
+        base_text = " ".join(base_parts)
         lines.append(
             f"Dialogue: 0,{_format_ts(group_start)},{_format_ts(group_end)},Word,,0,0,0,,{base_text}"
         )

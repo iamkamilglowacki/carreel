@@ -68,6 +68,7 @@ const translations = {
     "otomoto.errorGenerate": "Nie udało się utworzyć zadania.",
     "otomoto.salesCopyTitle": "Wygenerowany tekst sprzedażowy",
     "otomoto.allowedSources": "otomoto",
+    "otomoto.searchOtomoto": "Szukaj na Otomoto",
 
     "footer.text": "CarReel — Generator Rolek Samochodowych",
   },
@@ -139,6 +140,7 @@ const translations = {
     "otomoto.errorGenerate": "Failed to create job.",
     "otomoto.salesCopyTitle": "Generated sales copy",
     "otomoto.allowedSources": "otomoto",
+    "otomoto.searchOtomoto": "Search on Otomoto",
 
     "footer.text": "CarReel — Car Reel Generator",
   },
@@ -210,6 +212,7 @@ const translations = {
     "otomoto.errorGenerate": "Auftrag konnte nicht erstellt werden.",
     "otomoto.salesCopyTitle": "Generierter Verkaufstext",
     "otomoto.allowedSources": "mobile",
+    "otomoto.searchOtomoto": "Auf Otomoto suchen",
 
     "footer.text": "CarReel — Auto-Reel-Generator",
   },

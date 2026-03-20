@@ -43,6 +43,9 @@ class JobContext:
     # Language for pipeline (pl, en, de)
     language: str = "pl"
 
+    # Media source: "listing" (from otomoto/mobile.de) or "upload" (user media)
+    source: str = "upload"
+
     # Input files
     voice_memo_path: Path | None = None
     raw_media_paths: list[Path] = field(default_factory=list)

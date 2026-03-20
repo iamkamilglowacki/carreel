@@ -67,6 +67,8 @@ class VideoAssembler(BaseAgent):
             await progress(3, total_steps)
 
         # 4. Overlay audio and captions, trim to audio duration
+        from app.pipeline.agents.caption_generator import get_fonts_dir
+
         final_path = ctx.job_dir / "final.mp4"
         cmd_overlay = overlay_audio_and_captions(
             video_path=silent_video,
@@ -74,6 +76,7 @@ class VideoAssembler(BaseAgent):
             captions_path=ctx.captions_path,
             output_path=final_path,
             audio_duration=audio_duration,
+            fonts_dir=get_fonts_dir(),
         )
         await run_ffmpeg(cmd_overlay, timeout=180)
         if progress:

@@ -39,7 +39,7 @@ const translations = {
     "job.title": "Zadanie",
     "job.close": "Zamknij",
     "job.preview": "Podgląd",
-    "job.downloadMp4": "Pobierz MP4",
+    "job.downloadMp4": "Pobierz wideo",
 
     "job.sendWhatsApp": "Wyślij na WhatsApp",
     "job.confirmDelete": "Na pewno usunąć to zadanie?",
@@ -69,6 +69,18 @@ const translations = {
     "otomoto.salesCopyTitle": "Wygenerowany tekst sprzedażowy",
     "otomoto.allowedSources": "otomoto",
     "otomoto.searchOtomoto": "Szukaj na Otomoto",
+
+    "nav.reels": "Rolki",
+    "nav.comparator": "Porównywarka",
+
+    "comparator.title": "Porównywarka Mobile.de → Otomoto",
+    "comparator.subtitle": "Wklej link z Mobile.de — znajdziemy podobne ogłoszenia na Otomoto.",
+    "comparator.placeholder": "https://www.mobile.de/...",
+    "comparator.fetch": "Pobierz dane",
+    "comparator.loading": "Pobieram...",
+    "comparator.searchOtomoto": "Szukaj na Otomoto",
+    "comparator.errorUrl": "Wklej prawidłowy link z mobile.de",
+    "comparator.errorScrape": "Nie udało się pobrać danych z ogłoszenia.",
 
     "footer.text": "CarReel — Generator Rolek Samochodowych",
   },
@@ -142,6 +154,18 @@ const translations = {
     "otomoto.allowedSources": "otomoto",
     "otomoto.searchOtomoto": "Search on Otomoto",
 
+    "nav.reels": "Reels",
+    "nav.comparator": "Comparator",
+
+    "comparator.title": "Comparator Mobile.de → Otomoto",
+    "comparator.subtitle": "Paste a Mobile.de link — we'll find similar listings on Otomoto.",
+    "comparator.placeholder": "https://www.mobile.de/...",
+    "comparator.fetch": "Fetch data",
+    "comparator.loading": "Fetching...",
+    "comparator.searchOtomoto": "Search on Otomoto",
+    "comparator.errorUrl": "Paste a valid mobile.de link",
+    "comparator.errorScrape": "Failed to fetch listing data.",
+
     "footer.text": "CarReel — Car Reel Generator",
   },
 
@@ -213,6 +237,18 @@ const translations = {
     "otomoto.salesCopyTitle": "Generierter Verkaufstext",
     "otomoto.allowedSources": "mobile",
     "otomoto.searchOtomoto": "Auf Otomoto suchen",
+
+    "nav.reels": "Reels",
+    "nav.comparator": "Vergleicher",
+
+    "comparator.title": "Vergleicher Mobile.de → Otomoto",
+    "comparator.subtitle": "Mobile.de-Link einfügen — wir finden ähnliche Inserate auf Otomoto.",
+    "comparator.placeholder": "https://www.mobile.de/...",
+    "comparator.fetch": "Daten abrufen",
+    "comparator.loading": "Lade...",
+    "comparator.searchOtomoto": "Auf Otomoto suchen",
+    "comparator.errorUrl": "Gültigen mobile.de-Link einfügen",
+    "comparator.errorScrape": "Inseratsdaten konnten nicht abgerufen werden.",
 
     "footer.text": "CarReel — Auto-Reel-Generator",
   },

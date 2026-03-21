@@ -1,12 +1,21 @@
 <!DOCTYPE html>
 <html lang="pl" class="h-full">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6WNYCP9VE8"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-6WNYCP9VE8');
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CarReel</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <link rel="stylesheet" href="/style.css?v=4" />
+  <link rel="stylesheet" href="/style.css?v=5" />
   <script>
     tailwind.config = {
       theme: {
@@ -54,8 +63,32 @@
 
   <main class="max-w-6xl mx-auto px-4 py-8 space-y-8">
 
-    <!-- ===== New Reel — Tabbed Section ===== -->
-    <section class="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+    <!-- ===== Top-level section switcher ===== -->
+    <div class="flex rounded-lg overflow-hidden border border-slate-600 mb-6">
+      <button
+        @click="mainSection = 'reels'"
+        class="flex-1 px-4 py-3 text-sm font-semibold transition-colors focus:outline-none flex items-center justify-center gap-2"
+        :class="mainSection === 'reels' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        <span x-text="t('nav.reels')"></span>
+      </button>
+      <button
+        @click="mainSection = 'comparator'"
+        class="flex-1 px-4 py-3 text-sm font-semibold transition-colors focus:outline-none flex items-center justify-center gap-2"
+        :class="mainSection === 'comparator' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+        </svg>
+        <span x-text="t('nav.comparator')"></span>
+      </button>
+    </div>
+
+    <!-- ===== SECTION: Reels ===== -->
+    <section x-show="mainSection === 'reels'" class="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
 
       <!-- Tab switcher -->
       <div class="flex rounded-lg overflow-hidden border border-slate-600 mb-6">
@@ -140,7 +173,7 @@
                   <img :src="url" :alt="otomotoListing.title" class="w-full h-full rounded-md object-cover border border-slate-600" />
                   <button
                     @click="removeListingPhoto(idx)"
-                    class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 focus:outline-none"
+                    class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center focus:outline-none"
                     :aria-label="'Remove photo ' + (idx + 1)"
                   >
                     <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -150,11 +183,10 @@
                 </div>
               </template>
             </div>
-            <div class="flex flex-wrap gap-3">
             <button
               @click="generateFromOtomoto()"
               :disabled="otomotoGenerating"
-              class="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+              class="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900"
             >
               <span x-show="!otomotoGenerating" x-text="t('otomoto.generate')"></span>
               <span x-show="otomotoGenerating" class="flex items-center gap-2">
@@ -165,18 +197,6 @@
                 <span x-text="t('otomoto.generating')"></span>
               </span>
             </button>
-            <!-- Search on Otomoto button — only for mobile.de imports -->
-            <button
-              x-show="buildOtomotoSearchUrl() && _detectSource(otomotoUrl) === 'mobile'"
-              @click="openOtomotoSearch()"
-              class="flex-1 md:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <span x-text="t('otomoto.searchOtomoto')"></span>
-            </button>
-            </div>
           </div>
         </template>
 
@@ -319,7 +339,88 @@
       </div>
       </div><!-- /TAB: From Media -->
 
-    </section>
+    </section><!-- /SECTION: Reels -->
+
+    <!-- ===== SECTION: Comparator (Mobile.de → Otomoto) ===== -->
+    <section x-show="mainSection === 'comparator'" x-cloak class="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
+      <h2 class="text-lg font-semibold mb-2" x-text="t('comparator.title')"></h2>
+      <p class="text-sm text-slate-400 mb-5" x-text="t('comparator.subtitle')"></p>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input
+          type="url"
+          x-model="comparatorUrl"
+          :placeholder="t('comparator.placeholder')"
+          class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+        />
+        <button
+          @click="comparatorFetch()"
+          :disabled="comparatorLoading"
+          class="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+        >
+          <span x-show="!comparatorLoading" x-text="t('comparator.fetch')"></span>
+          <span x-show="comparatorLoading" class="flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span x-text="t('comparator.loading')"></span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Error -->
+      <div x-show="comparatorError" x-cloak class="mt-3 px-4 py-2 bg-red-900/40 border border-red-800 rounded-lg text-sm text-red-300" role="alert" x-text="comparatorError"></div>
+
+      <!-- Listing preview card -->
+      <template x-if="comparatorListing">
+        <div class="mt-4 p-4 bg-slate-900/60 border border-slate-700/50 rounded-lg">
+          <div class="flex items-start justify-between gap-4 mb-3">
+            <div>
+              <h3 class="text-base font-semibold text-slate-200" x-text="comparatorListing.title"></h3>
+              <p class="text-lg font-bold text-emerald-400 mt-1">
+                <span x-text="Number(comparatorListing.price).toLocaleString('pl-PL')"></span>
+                <span class="text-sm font-normal text-slate-400" x-text="comparatorListing.currency"></span>
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 mb-3">
+            <template x-for="tag in [comparatorListing.year, comparatorListing.mileage, comparatorListing.fuel_type, comparatorListing.engine_power, comparatorListing.gearbox, comparatorListing.color].filter(Boolean)">
+              <span class="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300" x-text="tag"></span>
+            </template>
+          </div>
+          <p class="text-xs text-slate-500 mb-4">
+            <span x-text="comparatorListing.photo_urls?.length || 0"></span> <span x-text="t('otomoto.photos')"></span>
+            <span class="mx-1">&middot;</span>
+            <span x-text="comparatorListing.location"></span>
+          </p>
+
+          <!-- Photo preview -->
+          <div class="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2 mb-4" x-show="comparatorListing.photo_urls?.length > 0">
+            <template x-for="(url, idx) in comparatorListing.photo_urls.slice(0, 10)" :key="url">
+              <div class="relative aspect-square">
+                <img :src="url" :alt="comparatorListing.title" class="w-full h-full rounded-md object-cover border border-slate-600" />
+              </div>
+            </template>
+            <div x-show="comparatorListing.photo_urls?.length > 10" class="aspect-square rounded-md bg-slate-700 border border-slate-600 flex items-center justify-center">
+              <span class="text-xs text-slate-400" x-text="'+' + (comparatorListing.photo_urls.length - 10)"></span>
+            </div>
+          </div>
+
+          <!-- Search on Otomoto button -->
+          <button
+            x-show="buildComparatorOtomotoUrl()"
+            @click="openComparatorOtomotoSearch()"
+            class="w-full md:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span x-text="t('comparator.searchOtomoto')"></span>
+          </button>
+        </div>
+      </template>
+    </section><!-- /SECTION: Comparator -->
 
     <!-- ===== Job Detail (selected job) ===== -->
     <section x-show="selectedJob" x-cloak class="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
@@ -373,6 +474,7 @@
               playsinline
               loop
               muted
+              preload="auto"
             ></video>
 
             <!-- iOS Status Bar -->
@@ -484,10 +586,10 @@
           <span class="text-xs text-slate-400 font-mono w-9 text-right flex-shrink-0" x-text="formatTime(reelCurrentTime)"></span>
 
           <!-- Progress bar -->
-          <div class="flex-1 h-2 bg-slate-700 rounded-full cursor-pointer relative group" @click="seekReel($event)">
-            <div class="h-full bg-blue-500 rounded-full transition-[width] duration-100" :style="'width:' + (reelDuration > 0 ? (reelCurrentTime / reelDuration * 100) : 0) + '%'"></div>
+          <div class="flex-1 h-2 bg-slate-700 rounded-full cursor-pointer relative group" @click="seekReel($event)" @mousedown="startSeekDrag($event)" @touchstart.prevent="startSeekDrag($event)">
+            <div class="h-full bg-blue-500 rounded-full" :class="{ 'transition-[width] duration-100': !_reelSeeking }" :style="'width:' + (reelDuration > 0 ? (reelCurrentTime / reelDuration * 100) : 0) + '%'"></div>
             <!-- Thumb -->
-            <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" :style="'left: calc(' + (reelDuration > 0 ? (reelCurrentTime / reelDuration * 100) : 0) + '% - 6px)'"></div>
+            <div class="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow pointer-events-none" :class="_reelSeeking ? 'scale-110' : ''" :style="'left: calc(' + (reelDuration > 0 ? (reelCurrentTime / reelDuration * 100) : 0) + '% - 7px)'"></div>
           </div>
 
           <!-- Time total -->
@@ -521,42 +623,6 @@
       </div>
     </section>
 
-    <!-- ===== Jobs List ===== -->
-    <section>
-      <h2 class="text-lg font-semibold mb-4" x-text="t('jobs.title')"></h2>
-
-      <div x-show="jobs.length === 0" class="text-slate-500 text-sm py-8 text-center" x-text="t('jobs.empty')">
-      </div>
-
-      <div class="space-y-3">
-        <template x-for="job in jobs" :key="job.job_id">
-          <div class="job-card bg-slate-800/50 border border-slate-700 rounded-lg p-4 flex items-center justify-between hover:bg-slate-800/80 transition-colors">
-            <div class="flex items-center gap-4 cursor-pointer flex-1 min-w-0" @click="selectJob(job.job_id)">
-              <span class="inline-block w-2 h-2 rounded-full flex-shrink-0"
-                :class="statusColor(job.status)"></span>
-              <div class="min-w-0">
-                <p class="font-mono text-sm text-slate-300 truncate" x-text="job.job_id"></p>
-                <p class="text-xs text-slate-500">
-                  <span x-text="job.media_count"></span> <span x-text="t('jobs.files')"></span>
-                  <span class="mx-1">&middot;</span>
-                  <span x-text="formatDate(job.created_at)"></span>
-                </p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3 flex-shrink-0">
-              <span class="px-2 py-0.5 rounded text-xs font-medium uppercase"
-                :class="statusColor(job.status)"
-                x-text="job.status"></span>
-              <button @click.stop="deleteJob(job.job_id)" class="text-slate-500 hover:text-red-400 transition-colors focus:outline-none focus:text-red-400" aria-label="Delete job">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </template>
-      </div>
-    </section>
 
   </main>
 
@@ -564,7 +630,7 @@
   <footer class="max-w-6xl mx-auto px-4 py-6 mt-8 border-t border-slate-800 text-center text-xs text-slate-600" x-text="t('footer.text')">
   </footer>
 
-  <script src="/i18n.js?v=4"></script>
-  <script src="/app.js?v=4"></script>
+  <script src="/i18n.js?v=5"></script>
+  <script src="/app.js?v=5"></script>
 </body>
 </html>

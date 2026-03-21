@@ -42,14 +42,24 @@ document.addEventListener("alpine:init", () => {
     // WhatsApp is localhost-only
     isLocal: ["localhost", "127.0.0.1"].includes(window.location.hostname),
 
+    // Top-level section (reels or comparator)
+    mainSection: "reels",
+
     // Create reel tab (url or manual)
     createTab: "url",
+
+    // Comparator state
+    comparatorUrl: "",
+    comparatorLoading: false,
+    comparatorError: "",
+    comparatorListing: null,
 
     // Reel preview playback
     reelPaused: true,
     reelCurrentTime: 0,
     reelDuration: 0,
     _reelRAF: null,
+    _reelSeeking: false,
 
     // SSE reconnect
     _sseRetries: 0,
@@ -719,6 +729,124 @@ document.addEventListener("alpine:init", () => {
       if (url) window.open(url, "_blank");
     },
 
+    // ---------- Comparator (Mobile.de → Otomoto) ----------
+
+    async comparatorFetch() {
+      const url = this.comparatorUrl.trim();
+      if (!url || !url.includes("mobile.de")) {
+        this.comparatorError = t("comparator.errorUrl");
+        return;
+      }
+      this.comparatorLoading = true;
+      this.comparatorError = "";
+      this.comparatorListing = null;
+
+      try {
+        const res = await fetch("/api/scrape-mobile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, lang: "de" }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || t("comparator.errorScrape"));
+        }
+        this.comparatorListing = await res.json();
+      } catch (e) {
+        this.comparatorError = e.message;
+      } finally {
+        this.comparatorLoading = false;
+      }
+    },
+
+    buildComparatorOtomotoUrl() {
+      const l = this.comparatorListing;
+      if (!l || !l.make) return null;
+
+      // Reuse the same mapping logic
+      const makeMap = {
+        "Abarth": "abarth", "Alfa Romeo": "alfa-romeo", "Audi": "audi",
+        "BMW": "bmw", "Chevrolet": "chevrolet", "Chrysler": "chrysler",
+        "Citroën": "citroen", "Cupra": "cupra", "Dacia": "dacia",
+        "DS": "ds-automobiles", "Dodge": "dodge", "Fiat": "fiat",
+        "Ford": "ford", "Honda": "honda", "Hyundai": "hyundai",
+        "Infiniti": "infiniti", "Jaguar": "jaguar", "Jeep": "jeep",
+        "Kia": "kia", "Lancia": "lancia", "Land Rover": "land-rover",
+        "Lexus": "lexus", "Maserati": "maserati", "Mazda": "mazda",
+        "Mercedes-Benz": "mercedes-benz", "MINI": "mini", "Mitsubishi": "mitsubishi",
+        "Nissan": "nissan", "Opel": "opel", "Peugeot": "peugeot",
+        "Porsche": "porsche", "Renault": "renault", "Seat": "seat",
+        "Škoda": "skoda", "Skoda": "skoda", "Smart": "smart",
+        "Subaru": "subaru", "Suzuki": "suzuki", "Tesla": "tesla",
+        "Toyota": "toyota", "Volkswagen": "volkswagen", "Volvo": "volvo",
+      };
+
+      const modelMap = {
+        "1er": "seria-1", "2er": "seria-2", "3er": "seria-3", "4er": "seria-4",
+        "5er": "seria-5", "6er": "seria-6", "7er": "seria-7", "8er": "seria-8",
+        "X1": "x1", "X2": "x2", "X3": "x3", "X4": "x4", "X5": "x5", "X6": "x6", "X7": "x7",
+        "Z4": "z4", "i3": "i3", "i4": "i4", "i5": "i5", "i7": "i7", "iX": "ix", "iX3": "ix3",
+        "A-Klasse": "klasa-a", "B-Klasse": "klasa-b", "C-Klasse": "klasa-c",
+        "E-Klasse": "klasa-e", "S-Klasse": "klasa-s", "G-Klasse": "klasa-g",
+        "V-Klasse": "klasa-v", "CLA": "cla", "CLS": "cls", "GLA": "gla",
+        "GLB": "glb", "GLC": "glc", "GLE": "gle", "GLS": "gls", "AMG GT": "amg-gt",
+        "EQA": "eqa", "EQB": "eqb", "EQC": "eqc", "EQE": "eqe", "EQS": "eqs",
+        "A1": "a1", "A3": "a3", "A4": "a4", "A5": "a5", "A6": "a6", "A7": "a7", "A8": "a8",
+        "Q2": "q2", "Q3": "q3", "Q4 e-tron": "q4-e-tron", "Q5": "q5", "Q7": "q7", "Q8": "q8",
+        "e-tron": "e-tron", "e-tron GT": "e-tron-gt", "TT": "tt", "R8": "r8",
+        "Golf": "golf", "Passat": "passat", "Polo": "polo", "Tiguan": "tiguan",
+        "T-Roc": "t-roc", "T-Cross": "t-cross", "Touareg": "touareg",
+        "Touran": "touran", "Arteon": "arteon", "ID.3": "id.3", "ID.4": "id.4", "ID.5": "id.5",
+        "Caddy": "caddy", "Multivan": "multivan", "Transporter": "transporter",
+      };
+
+      const fuelMap = {
+        "Benzin": "petrol", "Diesel": "diesel", "Elektro": "electric",
+        "Hybrid (Benzin/Elektro)": "hybrid", "Hybrid (Diesel/Elektro)": "hybrid",
+        "Plug-in-Hybrid": "hybrid", "Erdgas (CNG)": "cng", "Autogas (LPG)": "petrol-lpg",
+        "Wasserstoff": "hydrogen",
+      };
+
+      const makeSlug = makeMap[l.make] || l.make.toLowerCase().replace(/\s+/g, "-");
+      const modelSlug = modelMap[l.model] || l.model.toLowerCase().replace(/\s+/g, "-");
+
+      let year = "";
+      if (l.year) {
+        const ym = l.year.match(/(\d{4})/);
+        if (ym) year = ym[1];
+      }
+
+      let mileageNum = 0;
+      if (l.mileage) {
+        const cleaned = l.mileage.replace(/[.\s]/g, "").replace(/,/g, "");
+        const mm = cleaned.match(/(\d+)/);
+        if (mm) mileageNum = parseInt(mm[1], 10);
+      }
+
+      let path = `https://www.otomoto.pl/osobowe/${makeSlug}`;
+      if (modelSlug) path += `/${modelSlug}`;
+      if (year) path += `/od-${year}`;
+
+      const params = new URLSearchParams();
+      if (year) params.set("search[filter_float_year:to]", year);
+      const fuelVal = fuelMap[l.fuel_type];
+      if (fuelVal) params.set("search[filter_enum_fuel_type]", fuelVal);
+      if (mileageNum > 0) {
+        const from = Math.max(0, Math.round(mileageNum * 0.8 / 5000) * 5000);
+        const to = Math.round(mileageNum * 1.2 / 5000) * 5000;
+        params.set("search[filter_float_mileage:from]", String(from));
+        params.set("search[filter_float_mileage:to]", String(to));
+      }
+
+      const qs = params.toString();
+      return qs ? `${path}?${qs}` : path;
+    },
+
+    openComparatorOtomotoSearch() {
+      const url = this.buildComparatorOtomotoUrl();
+      if (url) window.open(url, "_blank");
+    },
+
     // WhatsApp — localhost only
     openWhatsApp() {
       if (!this.otomotoPhoneNumber || !this.selectedJob) return;
@@ -784,9 +912,50 @@ document.addEventListener("alpine:init", () => {
       if (!video || !video.duration) return;
       const bar = event.currentTarget;
       const rect = bar.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       video.currentTime = ratio * video.duration;
       this.reelCurrentTime = video.currentTime;
+    },
+
+    startSeekDrag(event) {
+      event.preventDefault();
+      this._reelSeeking = true;
+      this._seekBar = event.currentTarget;
+      const video = this.$refs.reelVideo;
+      this._wasPlaying = video && !video.paused;
+      if (video && !video.paused) video.pause();
+      this.seekReel(event);
+
+      const onMove = (e) => {
+        if (!this._reelSeeking) return;
+        // Reuse seekReel logic with the stored bar
+        const video = this.$refs.reelVideo;
+        if (!video || !video.duration) return;
+        const rect = this._seekBar.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        video.currentTime = ratio * video.duration;
+        this.reelCurrentTime = video.currentTime;
+      };
+
+      const onUp = () => {
+        this._reelSeeking = false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.removeEventListener("touchmove", onMove);
+        document.removeEventListener("touchend", onUp);
+        const video = this.$refs.reelVideo;
+        if (this._wasPlaying && video) {
+          video.play();
+          this.reelPaused = false;
+        }
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onUp);
     },
 
     formatTime(sec) {

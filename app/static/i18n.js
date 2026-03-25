@@ -66,7 +66,9 @@ const translations = {
     "otomoto.errorUrl": "Wklej prawidłowy link z otomoto.pl",
     "otomoto.errorScrape": "Nie udało się pobrać danych z ogłoszenia.",
     "otomoto.errorGenerate": "Nie udało się utworzyć zadania.",
-    "otomoto.salesCopyTitle": "Wygenerowany tekst sprzedażowy",
+    "otomoto.salesCopyTitle": "Tekst sprzedażowy",
+    "otomoto.salesCopyShow": "Pokaż cały",
+    "otomoto.salesCopyHide": "Schowaj",
     "otomoto.allowedSources": "otomoto",
     "otomoto.searchOtomoto": "Szukaj na Otomoto",
 
@@ -150,7 +152,9 @@ const translations = {
     "otomoto.errorUrl": "Paste a valid otomoto.pl listing URL",
     "otomoto.errorScrape": "Failed to fetch listing data.",
     "otomoto.errorGenerate": "Failed to create job.",
-    "otomoto.salesCopyTitle": "Generated sales copy",
+    "otomoto.salesCopyTitle": "Sales copy",
+    "otomoto.salesCopyShow": "Show all",
+    "otomoto.salesCopyHide": "Hide",
     "otomoto.allowedSources": "otomoto",
     "otomoto.searchOtomoto": "Search on Otomoto",
 
@@ -234,7 +238,9 @@ const translations = {
     "otomoto.errorUrl": "Gültigen mobile.de-Inseratslink einfügen",
     "otomoto.errorScrape": "Inseratsdaten konnten nicht abgerufen werden.",
     "otomoto.errorGenerate": "Auftrag konnte nicht erstellt werden.",
-    "otomoto.salesCopyTitle": "Generierter Verkaufstext",
+    "otomoto.salesCopyTitle": "Verkaufstext",
+    "otomoto.salesCopyShow": "Alles anzeigen",
+    "otomoto.salesCopyHide": "Ausblenden",
     "otomoto.allowedSources": "mobile",
     "otomoto.searchOtomoto": "Auf Otomoto suchen",
 

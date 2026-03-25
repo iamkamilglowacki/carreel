@@ -36,6 +36,7 @@ document.addEventListener("alpine:init", () => {
     otomotoListing: null,
     otomotoGenerating: false,
     otomotoSalesCopy: "",
+    otomotoSalesCopyLoading: false,
     otomotoPhoneNumber: "",
     otomotoListingTitle: "",
 
@@ -302,6 +303,7 @@ document.addEventListener("alpine:init", () => {
       this.otomotoLoading = true;
       this.otomotoError = "";
       this.otomotoListing = null;
+      this.otomotoSalesCopy = "";
 
       const endpoint = source === "mobile" ? "/api/scrape-mobile" : "/api/scrape-otomoto";
       try {
@@ -315,8 +317,24 @@ document.addEventListener("alpine:init", () => {
           throw new Error(err.detail || t("otomoto.errorScrape"));
         }
         this.otomotoListing = await res.json();
+        this.otomotoLoading = false;
+        // Auto-generate sales copy after scrape
+        this.otomotoSalesCopyLoading = true;
+        try {
+          const copyRes = await fetch("/api/generate-sales-copy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ listing: this.otomotoListing, lang: getLang() }),
+          });
+          if (copyRes.ok) {
+            const copyData = await copyRes.json();
+            this.otomotoSalesCopy = copyData.sales_copy || "";
+          }
+        } catch (_) {}
+        this.otomotoSalesCopyLoading = false;
       } catch (e) {
         this.otomotoError = e.message;
+        this.otomotoLoading = false;
       } finally {
         this.otomotoLoading = false;
       }
@@ -341,7 +359,7 @@ document.addEventListener("alpine:init", () => {
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, lang: getLang(), photo_urls: photoUrls }),
+          body: JSON.stringify({ url, lang: getLang(), photo_urls: photoUrls, sales_copy: this.otomotoSalesCopy || null }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));

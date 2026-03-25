@@ -23,6 +23,7 @@ class OtomotoRequest(BaseModel):
     url: str
     lang: str = "pl"
     photo_urls: list[str] | None = None
+    sales_copy: str | None = None
 
 
 @router.post("/scrape-otomoto")
@@ -36,6 +37,18 @@ async def scrape_listing(body: OtomotoRequest):
         logger.exception("Failed to scrape Otomoto URL: %s", body.url)
         raise HTTPException(status_code=502, detail=f"Nie udało się pobrać ogłoszenia: {exc}")
     return listing.to_dict()
+
+
+class GenerateSalesCopyRequest(BaseModel):
+    listing: dict
+    lang: str = "pl"
+
+
+@router.post("/generate-sales-copy")
+async def generate_sales_copy_endpoint(body: GenerateSalesCopyRequest):
+    """Generate sales copy text from listing data."""
+    text = await generate_sales_copy(body.listing, lang=body.lang)
+    return {"sales_copy": text}
 
 
 @router.post("/otomoto-job", status_code=201)
@@ -74,8 +87,8 @@ async def create_otomoto_job(request: Request, body: OtomotoRequest):
 
     ctx.raw_media_paths = photo_paths
 
-    # Generate sales-oriented voiceover text via AI
-    sales_copy = await generate_sales_copy(listing.to_dict(), lang=body.lang)
+    # Use provided sales copy or generate via AI
+    sales_copy = body.sales_copy if body.sales_copy and body.sales_copy.strip() else await generate_sales_copy(listing.to_dict(), lang=body.lang)
     ctx.transcript = sales_copy
 
     save_job(ctx)

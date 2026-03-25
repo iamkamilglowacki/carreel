@@ -5,6 +5,11 @@
     display: none !important;
 }
 
+/* Prevent iOS auto-zoom on input focus (requires font-size >= 16px) */
+input, textarea, select {
+    font-size: 16px !important;
+}
+
 /* Smooth transitions for step indicators */
 .step-indicator {
     transition: all 0.3s ease;

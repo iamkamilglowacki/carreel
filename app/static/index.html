@@ -11,7 +11,7 @@
     gtag('config', 'G-6WNYCP9VE8');
   </script>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>CarReel</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -123,7 +123,7 @@
             type="url"
             x-model="otomotoUrl"
             :placeholder="t('otomoto.placeholder')"
-            class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-base text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           />
           <button
             @click="importOtomoto()"
@@ -183,9 +183,26 @@
                 </div>
               </template>
             </div>
+            <!-- Sales copy editor -->
+            <div class="mt-4 mb-4">
+              <label class="block text-sm font-semibold text-emerald-400 uppercase tracking-wide mb-2" x-text="t('otomoto.salesCopyTitle')"></label>
+              <div x-show="otomotoSalesCopyLoading" class="flex items-center gap-2 text-sm text-slate-400 py-2">
+                <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span x-text="t('otomoto.generating')"></span>
+              </div>
+              <textarea
+                x-show="!otomotoSalesCopyLoading"
+                x-model="otomotoSalesCopy"
+                class="w-full h-36 bg-slate-900 border border-slate-600 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-500 resize-none focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+              ></textarea>
+            </div>
+
             <button
               @click="generateFromOtomoto()"
-              :disabled="otomotoGenerating"
+              :disabled="otomotoGenerating || otomotoSalesCopyLoading"
               class="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900"
             >
               <span x-show="!otomotoGenerating" x-text="t('otomoto.generate')"></span>
@@ -199,12 +216,6 @@
             </button>
           </div>
         </template>
-
-        <!-- Generated sales copy preview -->
-        <div x-show="otomotoSalesCopy" x-cloak class="mt-4 bg-emerald-900/20 border border-emerald-700/40 rounded-lg p-5">
-          <h3 class="text-sm font-semibold text-emerald-400 uppercase tracking-wide mb-2" x-text="t('otomoto.salesCopyTitle')"></h3>
-          <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-line" x-text="otomotoSalesCopy"></p>
-        </div>
       </div>
 
       <!-- ===== TAB: From Media ===== -->
@@ -351,7 +362,7 @@
           type="url"
           x-model="comparatorUrl"
           :placeholder="t('comparator.placeholder')"
-          class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-base text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
         />
         <button
           @click="comparatorFetch()"
@@ -440,20 +451,18 @@
       </div>
 
       <!-- Pipeline steps -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-6" aria-live="polite">
+      <div class="flex flex-col gap-1.5 mb-6" aria-live="polite">
         <template x-for="s in steps" :key="s.key">
-          <div class="step-indicator flex flex-col items-center gap-2 p-3 rounded-lg bg-slate-900/50 border border-slate-700/50"
-            :class="{ 'border-blue-500/40 bg-blue-950/20': s.status === 'active', 'border-emerald-500/30': s.status === 'completed', 'border-red-500/30': s.status === 'failed' }">
-            <svg class="w-6 h-6" :class="stepColorClass(s.status)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="flex items-center gap-3">
+            <svg class="w-4 h-4 flex-shrink-0" :class="stepColorClass(s.status)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" :d="stepIcon(s.status)" />
             </svg>
-            <span class="text-xs font-medium" :class="stepColorClass(s.status)" x-text="s.label"></span>
-            <!-- Progress bar -->
-            <div x-show="s.status === 'active'" class="w-full h-1.5 bg-slate-700 rounded-full overflow-hidden mt-1">
+            <span class="text-sm" :class="stepColorClass(s.status)" x-text="s.label"></span>
+            <div x-show="s.status === 'active'" class="flex-1 h-1 bg-slate-700 rounded-full overflow-hidden">
               <div x-show="s.progress > 0" class="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out" :style="'width: ' + (s.progress || 0) + '%'"></div>
               <div x-show="!s.progress || s.progress === 0" class="h-full bg-blue-500 rounded-full progress-indeterminate"></div>
             </div>
-            <span x-show="s.status === 'active' && s.progress > 0" class="text-[10px] text-blue-400" x-text="s.progress + '%'"></span>
+            <span x-show="s.status === 'active' && s.progress > 0" class="text-[10px] text-blue-400 ml-auto" x-text="s.progress + '%'"></span>
           </div>
         </template>
       </div>

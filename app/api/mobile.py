@@ -23,6 +23,7 @@ class MobileRequest(BaseModel):
     url: str
     lang: str = "pl"
     photo_urls: list[str] | None = None
+    sales_copy: str | None = None
 
 
 @router.post("/scrape-mobile")
@@ -73,7 +74,7 @@ async def create_mobile_job(request: Request, body: MobileRequest):
 
     ctx.raw_media_paths = photo_paths
 
-    sales_copy = await generate_sales_copy(listing.to_dict(), lang=body.lang)
+    sales_copy = body.sales_copy if body.sales_copy and body.sales_copy.strip() else await generate_sales_copy(listing.to_dict(), lang=body.lang)
     ctx.transcript = sales_copy
 
     save_job(ctx)

@@ -120,6 +120,8 @@ _index_html = (static_dir / "index.html").read_text(encoding="utf-8")
 
 SUPPORTED_LANGS = {"pl", "en", "de"}
 
+_comparator_html = (static_dir / "comparator.html").read_text(encoding="utf-8")
+
 
 @app.get("/")
 async def root_redirect():
@@ -133,6 +135,16 @@ async def lang_page(request: Request):
     lang = request.url.path.strip("/")
     lang_script = f'<script>localStorage.setItem("lang","{lang}")</script>'
     html = _index_html.replace("</head>", f"{lang_script}\n</head>")
+    return HTMLResponse(html)
+
+
+@app.get("/comparator")
+async def comparator_page(request: Request):
+    lang = request.query_params.get("lang", "pl")
+    if lang not in SUPPORTED_LANGS:
+        lang = "pl"
+    lang_script = f'<script>localStorage.setItem("lang","{lang}")</script>'
+    html = _comparator_html.replace("</head>", f"{lang_script}\n</head>")
     return HTMLResponse(html)
 
 

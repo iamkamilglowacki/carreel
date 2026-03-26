@@ -282,6 +282,11 @@ document.addEventListener("alpine:init", () => {
 
     // ---------- Otomoto import ----------
 
+    _extractUrl(text) {
+      const match = text.match(/https?:\/\/\S+/);
+      return match ? match[0] : text;
+    },
+
     _detectSource(url) {
       if (url.includes("otomoto.pl")) return "otomoto";
       if (url.includes("mobile.de")) return "mobile";
@@ -294,7 +299,7 @@ document.addEventListener("alpine:init", () => {
     },
 
     async importOtomoto() {
-      const url = this.otomotoUrl.trim();
+      const url = this._extractUrl(this.otomotoUrl.trim());
       const source = this._detectSource(url);
       if (!url || !source || !this._isSourceAllowed(source)) {
         this.otomotoError = t("otomoto.errorUrl");
@@ -346,7 +351,7 @@ document.addEventListener("alpine:init", () => {
     },
 
     async generateFromOtomoto() {
-      const url = this.otomotoUrl.trim();
+      const url = this._extractUrl(this.otomotoUrl.trim());
       if (!url) return;
       const source = this._detectSource(url);
       this.otomotoGenerating = true;
@@ -674,8 +679,8 @@ document.addEventListener("alpine:init", () => {
         // Mercedes
         "A-Klasse": "klasa-a", "B-Klasse": "klasa-b", "C-Klasse": "klasa-c",
         "E-Klasse": "klasa-e", "S-Klasse": "klasa-s", "G-Klasse": "klasa-g",
-        "V-Klasse": "klasa-v", "CLA": "cla", "CLS": "cls", "GLA": "gla",
-        "GLB": "glb", "GLC": "glc", "GLE": "gle", "GLS": "gls", "AMG GT": "amg-gt",
+        "V-Klasse": "klasa-v", "CLA": "cla-klasa", "CLS": "cls-klasa", "GLA": "gla-klasa",
+        "GLB": "glb-klasa", "GLC": "glc-klasa", "GLE": "gle-klasa", "GLS": "gls-klasa", "AMG GT": "amg-gt",
         "EQA": "eqa", "EQB": "eqb", "EQC": "eqc", "EQE": "eqe", "EQS": "eqs",
         // Audi
         "A1": "a1", "A3": "a3", "A4": "a4", "A5": "a5", "A6": "a6", "A7": "a7", "A8": "a8",
@@ -697,7 +702,11 @@ document.addEventListener("alpine:init", () => {
       };
 
       const makeSlug = makeMap[l.make] || l.make.toLowerCase().replace(/\s+/g, "-");
-      const modelSlug = modelMap[l.model] || l.model.toLowerCase().replace(/\s+/g, "-");
+      const modelSlug = modelMap[l.model] ||
+        (() => {
+          const key = Object.keys(modelMap).find(k => l.model.startsWith(k + " ") || l.model === k);
+          return key ? modelMap[key] : l.model.toLowerCase().replace(/\s+/g, "-");
+        })();
 
       // Extract year from "Erstzulassung" (e.g. "03/2020" or "2020")
       let year = "";
@@ -721,7 +730,7 @@ document.addEventListener("alpine:init", () => {
 
       const params = new URLSearchParams();
       if (year) {
-        params.set("search[filter_float_year:to]", year);
+        params.set("search[filter_float_year:from]", year);
       }
 
       // Fuel type
@@ -750,7 +759,7 @@ document.addEventListener("alpine:init", () => {
     // ---------- Comparator (Mobile.de → Otomoto) ----------
 
     async comparatorFetch() {
-      const url = this.comparatorUrl.trim();
+      const url = this._extractUrl(this.comparatorUrl.trim());
       if (!url || !url.includes("mobile.de")) {
         this.comparatorError = t("comparator.errorUrl");
         return;
@@ -806,8 +815,8 @@ document.addEventListener("alpine:init", () => {
         "Z4": "z4", "i3": "i3", "i4": "i4", "i5": "i5", "i7": "i7", "iX": "ix", "iX3": "ix3",
         "A-Klasse": "klasa-a", "B-Klasse": "klasa-b", "C-Klasse": "klasa-c",
         "E-Klasse": "klasa-e", "S-Klasse": "klasa-s", "G-Klasse": "klasa-g",
-        "V-Klasse": "klasa-v", "CLA": "cla", "CLS": "cls", "GLA": "gla",
-        "GLB": "glb", "GLC": "glc", "GLE": "gle", "GLS": "gls", "AMG GT": "amg-gt",
+        "V-Klasse": "klasa-v", "CLA": "cla-klasa", "CLS": "cls-klasa", "GLA": "gla-klasa",
+        "GLB": "glb-klasa", "GLC": "glc-klasa", "GLE": "gle-klasa", "GLS": "gls-klasa", "AMG GT": "amg-gt",
         "EQA": "eqa", "EQB": "eqb", "EQC": "eqc", "EQE": "eqe", "EQS": "eqs",
         "A1": "a1", "A3": "a3", "A4": "a4", "A5": "a5", "A6": "a6", "A7": "a7", "A8": "a8",
         "Q2": "q2", "Q3": "q3", "Q4 e-tron": "q4-e-tron", "Q5": "q5", "Q7": "q7", "Q8": "q8",
@@ -825,8 +834,32 @@ document.addEventListener("alpine:init", () => {
         "Wasserstoff": "hydrogen",
       };
 
+      const bodyTypeMap = {
+        "Kombi": "combi", "Limousine": "sedan", "Cabrio/Roadster": "kabriolet",
+        "Sportwagen/Coupé": "coupe", "Geländewagen/Pickup": "suv",
+        "Van/Kleinbus": "van", "Kleinwagen": "hatchback", "Kompaktklasse": "kompakt",
+        "SUV/Geländewagen": "suv", "SUV/Geländewagen/Pickup": "suv",
+        "Shooting Brake": "combi",
+      };
+
       const makeSlug = makeMap[l.make] || l.make.toLowerCase().replace(/\s+/g, "-");
-      const modelSlug = modelMap[l.model] || l.model.toLowerCase().replace(/\s+/g, "-");
+      const modelSlug = modelMap[l.model] ||
+        (() => {
+          const key = Object.keys(modelMap).find(k => l.model.startsWith(k + " ") || l.model === k);
+          return key ? modelMap[key] : l.model.toLowerCase().replace(/\s+/g, "-");
+        })();
+
+      let bodySlug = bodyTypeMap[l.body_type] || "";
+      if (!bodySlug) {
+        // Fallback: detect body type from title/model
+        const titleLower = (l.title + " " + l.model).toLowerCase();
+        if (titleLower.includes("shooting brake") || titleLower.includes("kombi") || titleLower.includes("touring") || titleLower.includes("variant") || titleLower.includes("avant") || titleLower.includes("estate") || titleLower.includes("sportback")) bodySlug = "combi";
+        else if (titleLower.includes("cabrio") || titleLower.includes("roadster") || titleLower.includes("cabriolet") || titleLower.includes("spider") || titleLower.includes("spyder")) bodySlug = "kabriolet";
+        else if (titleLower.includes("coupé") || titleLower.includes("coupe")) bodySlug = "coupe";
+        else if (titleLower.includes("limousine") || titleLower.includes("sedan") || titleLower.includes("berlina")) bodySlug = "sedan";
+        else if (titleLower.includes("suv") || titleLower.includes("pickup")) bodySlug = "suv";
+        else if (titleLower.includes("van") || titleLower.includes("kleinbus")) bodySlug = "van";
+      }
 
       let year = "";
       if (l.year) {
@@ -843,10 +876,11 @@ document.addEventListener("alpine:init", () => {
 
       let path = `https://www.otomoto.pl/osobowe/${makeSlug}`;
       if (modelSlug) path += `/${modelSlug}`;
+      if (bodySlug) path += `/seg-${bodySlug}`;
       if (year) path += `/od-${year}`;
 
       const params = new URLSearchParams();
-      if (year) params.set("search[filter_float_year:to]", year);
+      if (year) params.set("search[filter_float_year:from]", year);
       const fuelVal = fuelMap[l.fuel_type];
       if (fuelVal) params.set("search[filter_enum_fuel_type]", fuelVal);
       if (mileageNum > 0) {

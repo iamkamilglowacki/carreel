@@ -320,10 +320,21 @@ def _parse_listing(html: str) -> MobileListing:
     return listing
 
 
+def _normalize_mobile_url(url: str) -> str:
+    """Convert mobile.de mobile app links to desktop listing URLs."""
+    # Handle m.mobile.de/fahrzeuge/details.html?id=123 format
+    match = re.search(r"[?&]id=(\d+)", url)
+    if match and "m.mobile.de" in url:
+        return f"https://suchen.mobile.de/fahrzeuge/details.html?id={match.group(1)}"
+    return url
+
+
 async def scrape_mobile(url: str) -> MobileListing:
     """Fetch and parse a mobile.de listing page via ScrapingBee."""
     if "mobile.de" not in url:
         raise ValueError("URL must be from mobile.de")
+
+    url = _normalize_mobile_url(url)
 
     if not settings.scrapingbee_api_key:
         raise ValueError("ScrapingBee API key is required for mobile.de scraping")

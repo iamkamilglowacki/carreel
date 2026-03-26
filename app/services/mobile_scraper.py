@@ -321,10 +321,9 @@ def _parse_listing(html: str) -> MobileListing:
 
 
 def _normalize_mobile_url(url: str) -> str:
-    """Convert mobile.de mobile app links to desktop listing URLs."""
-    # Handle m.mobile.de/fahrzeuge/details.html?id=123 format
+    """Convert any mobile.de link variant to the canonical German desktop URL."""
     match = re.search(r"[?&]id=(\d+)", url)
-    if match and "m.mobile.de" in url:
+    if match:
         return f"https://suchen.mobile.de/fahrzeuge/details.html?id={match.group(1)}"
     return url
 

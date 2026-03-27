@@ -40,6 +40,7 @@ class MobileListing:
     color: str = ""
     make: str = ""
     model: str = ""
+    model_range: str = ""
     description: str = ""
     location: str = ""
     seller_name: str = ""
@@ -62,6 +63,7 @@ class MobileListing:
             "color": self.color,
             "make": self.make,
             "model": self.model,
+            "model_range": self.model_range,
             "description": self.description,
             "location": self.location,
             "seller_name": self.seller_name,
@@ -165,7 +167,8 @@ def _set_field(listing: MobileListing, key: str, val: str) -> None:
             listing.title = f"{listing.make} {listing.model} {val}"
         return
     if key == "series":
-        return  # informational only
+        listing.model_range = val
+        return
     current = getattr(listing, key, None)
     if not current:
         setattr(listing, key, val)
@@ -216,7 +219,31 @@ def _parse_listing(html: str) -> MobileListing:
         listing.title = f"{listing.make} {listing.model}"
 
     # --- Key features & technical data (combined approach) ---
-    # Parse label/value pairs from the full tech area using a flexible regex
+    # Primary: parse by data-testid attribute (stable across mobile.de layouts)
+    _testid_map = {
+        "mileage-item": "mileage",
+        "power-item": "engine_power",
+        "cubicCapacity-item": "engine_capacity",
+        "fuel-item": "fuel_type",
+        "transmission-item": "gearbox",
+        "firstRegistration-item": "year",
+        "category-item": "body_type",
+        "manufacturerColorName-item": "color",
+        "color-item": "color",
+        "trimLine-item": "trim",
+        "modelRange-item": "series",
+    }
+    for testid, field_key in _testid_map.items():
+        m = re.search(
+            rf'data-testid="{re.escape(testid)}"[^>]*>.*?</(?:dt|div|span)>\s*<(?:dd|div|span)[^>]*>(.*?)</(?:dd|div|span)>',
+            html, re.DOTALL,
+        )
+        if m:
+            val = _clean_html(m.group(1))
+            if val:
+                _set_field(listing, field_key, val)
+
+    # Fallback: label-based parsing for older mobile.de layouts
     _tech_labels = {
         "Kilometerstand": "mileage",
         "Leistung": "engine_power",
@@ -230,15 +257,16 @@ def _parse_listing(html: str) -> MobileListing:
         "Ausstattungslinie": "trim",
         "Baureihe": "series",
     }
-    # Strategy: find each label in HTML, then grab the next text node after it
     for label, field_key in _tech_labels.items():
-        # Match: label text in a span, then some tags, then value text
+        # Skip if already found via data-testid
+        if getattr(listing, field_key, None):
+            continue
+        # Try: label in a span, value in a div/span with specific class
         pattern = rf">{re.escape(label)}</span>.*?<(?:div|span)[^>]*class=\"[^\"]*(?:geJSa|value)[^\"]*\"[^>]*>(.*?)</(?:div|span)>"
         m = re.search(pattern, html, re.DOTALL)
         if not m:
             # Fallback: label | value pattern in cleaned text
             pattern2 = rf"{re.escape(label)}\s*\|[\s|]*(.*?)(?:\s*\|\s*\||$)"
-            # Search in tech section
             tech_area = re.search(
                 r'data-testid="vip-key-features-box"(.*?)data-testid="vip-(?:dealer|more)-',
                 html, re.DOTALL,

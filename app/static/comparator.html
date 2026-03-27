@@ -279,21 +279,60 @@ function comparatorApp() {
       };
 
       const makeSlug = makeMap[l.make] || l.make.toLowerCase().replace(/\s+/g, "-");
-      const modelSlug = modelMap[l.model] ||
+
+      // Detect model sub-variant from model_range (Baureihe), title, and body_type
+      // e.g. "A5 Sportback (8T)(05.2009->)" → "sportback"
+      const rangeLower = (l.model_range || "").toLowerCase();
+      const titleLower = (l.title + " " + (l.model || "")).toLowerCase();
+      const combined = rangeLower + " " + titleLower;
+
+      // Sub-variant keywords → otomoto slug suffix
+      const variantMap = [
+        { keys: ["sportback"], suffix: "sportback" },
+        { keys: ["avant"], suffix: "avant" },
+        { keys: ["allroad"], suffix: "allroad" },
+        { keys: ["shooting brake"], suffix: "shooting-brake" },
+        { keys: ["touring"], suffix: "touring" },
+        { keys: ["gran coupe", "gran coupé", "gc"], suffix: "gran-coupe" },
+        { keys: ["gran turismo", "gt"], suffix: "gt" },
+        { keys: ["cabrio", "cabriolet", "roadster", "spider", "spyder"], suffix: "cabrio" },
+        { keys: ["coupé", "coupe"], suffix: "coupe" },
+        { keys: ["limousine", "sedan", "berlina"], suffix: "limousine" },
+        { keys: ["variant"], suffix: "variant" },
+        { keys: ["combi", "kombi", "estate", "break"], suffix: "kombi" },
+        { keys: ["van", "kleinbus"], suffix: "van" },
+        { keys: ["suv", "pickup"], suffix: "suv" },
+      ];
+
+      let variantSuffix = "";
+      for (const v of variantMap) {
+        if (v.keys.some(k => combined.includes(k))) {
+          variantSuffix = v.suffix;
+          break;
+        }
+      }
+
+      // Build model slug: first get base model, then append variant if found
+      const baseModelSlug = modelMap[l.model] ||
         (() => {
           const key = Object.keys(modelMap).find(k => l.model.startsWith(k + " ") || l.model === k);
           return key ? modelMap[key] : l.model.toLowerCase().replace(/\s+/g, "-");
         })();
 
+      // Append variant suffix if it's not already in the base slug
+      const modelSlug = (variantSuffix && !baseModelSlug.includes(variantSuffix))
+        ? `${baseModelSlug}-${variantSuffix}`
+        : baseModelSlug;
+
+      // Body type for URL segment (separate from model variant)
       let bodySlug = bodyTypeMap[l.body_type] || "";
       if (!bodySlug) {
-        const titleLower = (l.title + " " + l.model).toLowerCase();
-        if (titleLower.includes("shooting brake") || titleLower.includes("kombi") || titleLower.includes("touring") || titleLower.includes("variant") || titleLower.includes("avant") || titleLower.includes("estate") || titleLower.includes("sportback")) bodySlug = "combi";
-        else if (titleLower.includes("cabrio") || titleLower.includes("roadster") || titleLower.includes("cabriolet") || titleLower.includes("spider") || titleLower.includes("spyder")) bodySlug = "kabriolet";
-        else if (titleLower.includes("coupé") || titleLower.includes("coupe")) bodySlug = "coupe";
-        else if (titleLower.includes("limousine") || titleLower.includes("sedan") || titleLower.includes("berlina")) bodySlug = "sedan";
-        else if (titleLower.includes("suv") || titleLower.includes("pickup")) bodySlug = "suv";
-        else if (titleLower.includes("van") || titleLower.includes("kleinbus")) bodySlug = "van";
+        if (combined.includes("shooting brake") || combined.includes("kombi") || combined.includes("touring") || combined.includes("variant") || combined.includes("avant") || combined.includes("estate") || combined.includes("sportback")) bodySlug = "combi";
+        else if (combined.includes("cabrio") || combined.includes("roadster") || combined.includes("cabriolet") || combined.includes("spider") || combined.includes("spyder")) bodySlug = "kabriolet";
+        else if (combined.includes("coupé") || combined.includes("coupe")) bodySlug = "coupe";
+        else if (combined.includes("limousine") || combined.includes("sedan") || combined.includes("berlina")) bodySlug = "sedan";
+        else if (combined.includes("suv") || combined.includes("pickup")) bodySlug = "suv";
+        else if (combined.includes("van") || combined.includes("kleinbus")) bodySlug = "van";
       }
 
       let year = "";
@@ -323,6 +362,16 @@ function comparatorApp() {
         const to = Math.round(mileageNum * 1.2 / 5000) * 5000;
         params.set("search[filter_float_mileage:from]", String(from));
         params.set("search[filter_float_mileage:to]", String(to));
+      }
+
+      if (l.engine_capacity) {
+        const capCleaned = l.engine_capacity.replace(/[.\s]/g, "").replace(/,/g, "");
+        const capMatch = capCleaned.match(/(\d+)/);
+        if (capMatch) {
+          const capCcm = parseInt(capMatch[1], 10);
+          params.set("search[filter_float_engine_capacity:from]", String(capCcm - 50));
+          params.set("search[filter_float_engine_capacity:to]", String(capCcm + 50));
+        }
       }
 
       const qs = params.toString();
